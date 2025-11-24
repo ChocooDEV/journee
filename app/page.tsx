@@ -7,7 +7,7 @@ import AddPinModal from '@/components/AddPinModal';
 import PinDetailsModal from '@/components/PinDetailsModal';
 import YearRecapControls from '@/components/YearRecapControls';
 import YearRecapOverlay from '@/components/YearRecapOverlay';
-import AuthModal from '@/components/AuthModal';
+import LandingPage from '@/components/LandingPage';
 import { getPinsForUser, getPinWithMedia, createPinWithMedia, getPinsForYear } from '@/lib/supabase/queries';
 import { createClient } from '@/lib/supabase/client-browser';
 import type { PinWithThumbnail, PinWithMedia, CreatePinData } from '@/types';
@@ -15,7 +15,6 @@ import type { User } from '@supabase/supabase-js';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [pins, setPins] = useState<PinWithThumbnail[]>([]);
   const [selectedPin, setSelectedPin] = useState<PinWithMedia | null>(null);
   const [isAddPinOpen, setIsAddPinOpen] = useState(false);
@@ -155,36 +154,36 @@ export default function Home() {
     setUser(null);
   };
 
+  // Show landing page if user is not authenticated
+  if (!user) {
+    return (
+      <LandingPage
+        onGetStarted={() => {
+          checkAuth();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="relative h-screen w-screen overflow-hidden">
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
-        <h1 className="text-xl font-bold text-gray-900">My Year in Places</h1>
+        <h1 className="text-xl font-bold text-gray-900">Journee</h1>
         <div className="flex items-center gap-3">
-          {user ? (
-            <>
-              <span className="text-sm text-gray-600">{user.email}</span>
-              <button
-                onClick={handleSignOut}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
-              >
-                Sign Out
-              </button>
-              <YearRecapControls
-                selectedYear={selectedYear}
-                onYearChange={setSelectedYear}
-                onStartRecap={handleStartRecap}
-                isRecapActive={isRecapMode}
-              />
-            </>
-          ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-            >
-              Sign In
-            </button>
-          )}
+          <span className="text-sm text-gray-600 hidden sm:inline">{user.email}</span>
+          <button
+            onClick={handleSignOut}
+            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+          >
+            Sign Out
+          </button>
+          <YearRecapControls
+            selectedYear={selectedYear}
+            onYearChange={setSelectedYear}
+            onStartRecap={handleStartRecap}
+            isRecapActive={isRecapMode}
+          />
         </div>
       </div>
 
@@ -214,15 +213,6 @@ export default function Home() {
         <AddPinButton onClick={() => setIsAddPinOpen(true)} />
       )}
 
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={() => {
-          setIsAuthModalOpen(false);
-          checkAuth();
-        }}
-      />
 
       {/* Add Pin Modal */}
       <AddPinModal

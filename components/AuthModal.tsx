@@ -58,97 +58,131 @@ export default function AuthModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-6 mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">
-            {isLogin ? 'Sign In' : 'Sign Up'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#F7F3E9] px-6">
+      <div className="w-full max-w-md">
+        {/* App Branding */}
+        <div className="flex flex-col items-center mb-12">
+          {/* Logo */}
+          <img 
+            src="/logo.png" 
+            alt="Journee Logo" 
+            className="w-24 h-24 mb-3 object-contain"
+          />
+          {/* App Name */}
+          <h1 className="text-3xl font-semibold text-black tracking-tight">Journee</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
               {error}
             </div>
           )}
 
           {message && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded text-sm">
               {message}
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="your@email.com"
-            />
-          </div>
+          {/* Email Input */}
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-gray-400"
+            placeholder="Email"
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
+          {/* Password Input */}
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:border-gray-400"
+            placeholder="Password"
+          />
 
+          {/* Log in Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="w-full px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-base"
           >
-            {loading ? 'Loading...' : isLogin ? 'Sign In' : 'Sign Up'}
+            {loading ? 'Loading...' : isLogin ? 'Log in' : 'Sign up'}
           </button>
         </form>
 
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(null);
-              setMessage(null);
-            }}
-            className="text-sm text-blue-600 hover:text-blue-700"
-          >
-            {isLogin
-              ? "Don't have an account? Sign up"
-              : 'Already have an account? Sign in'}
-          </button>
+        {/* Links */}
+        <div className="mt-6 space-y-4 text-center">
+          {isLogin && (
+            <button
+              type="button"
+              className="text-sm text-black hover:underline"
+            >
+              Forgot password?
+            </button>
+          )}
+          
+          <div className="text-sm text-black">
+            {isLogin ? (
+              <>
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(false);
+                    setError(null);
+                    setMessage(null);
+                  }}
+                  className="font-bold hover:underline"
+                >
+                  Sign up
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(true);
+                    setError(null);
+                    setMessage(null);
+                  }}
+                  className="font-bold hover:underline"
+                >
+                  Log in
+                </button>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Close button (optional, for modal behavior) */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
+          aria-label="Close"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   );

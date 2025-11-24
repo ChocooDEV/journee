@@ -8,6 +8,11 @@
 if (typeof window !== 'undefined') {
   // Helper function to convert Mapbox URL to proxy URL
   const convertToProxyUrl = (url: string): string | null => {
+    // Explicitly exclude Supabase and other non-Mapbox URLs
+    if (url.includes('supabase.co') || url.includes('supabase.com')) {
+      return null;
+    }
+    
     // Handle both api.mapbox.com and events.mapbox.com
     const isMapboxRequest = url.includes('api.mapbox.com') || url.includes('events.mapbox.com');
     if (!isMapboxRequest) return null;
