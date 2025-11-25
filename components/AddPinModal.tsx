@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { CreatePinData } from '@/types';
 
 interface AddPinModalProps {
@@ -16,17 +16,199 @@ export default function AddPinModal({
   onSubmit,
   initialLocation,
 }: AddPinModalProps) {
-  const [step, setStep] = useState(1);
-  const [lat, setLat] = useState(initialLocation?.lat || 37.7749);
-  const [lng, setLng] = useState(initialLocation?.lng || -122.4194);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [lat, setLat] = useState(initialLocation?.lat || 48.8566);
+  const [lng, setLng] = useState(initialLocation?.lng || 2.3522);
+  const [locationName, setLocationName] = useState('');
+  const [hasTriedAutoLocation, setHasTriedAutoLocation] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<any[]>([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const [caption, setCaption] = useState('');
   const [dateTaken, setDateTaken] = useState(
     new Date().toISOString().split('T')[0]
   );
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const locationInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Format date for display (e.g., "Mar 20, 2024")
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
+
+  // Reverse geocode coordinates to get location name (city and country)
+  const reverseGeocode = async (latitude: number, longitude: number) => {
+    try {
+      setIsLoadingLocation(true);
+      const response = await fetch(
+        `/api/mapbox/api/geocoding/v5/mapbox.places/${longitude},${latitude}.json`
+      );
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        try {
+          // Extract city and country from the place_name
+          const cityFeature = data.features.find((feature: any) => feature.id.startsWith('place'));
+          const countryFeature = data.features.find((feature: any) => feature.id.startsWith('country'));
+          
+          const city = cityFeature ? cityFeature.text : null;
+          const country = countryFeature ? countryFeature.text : null;
+          
+          if (city && country) {
+            setLocationName(`${city}, ${country}`);
+          } else if (city) {
+            setLocationName(city);
+          } else if (data.features[0].place_name) {
+            // Fallback to first part of place_name
+            setLocationName(data.features[0].place_name.split(',')[0]);
+          } else {
+            setLocationName('Unknown Location');
+          }
+        } catch (exceptionVar) {
+          console.error('Error extracting city and country:', exceptionVar);
+          setLocationName(data.features[0].text || 'Unknown Location');
+        }
+      } else {
+        setLocationName('Unknown Location');
+      }
+    } catch (error) {
+      console.error('Error reverse geocoding:', error);
+      setLocationName('Unknown Location');
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+
+  // Autocomplete search for locations
+  const searchLocations = async (query: string) => {
+    if (!query || query.length < 2) {
+      setAutocompleteSuggestions([]);
+      setShowAutocomplete(false);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      const response = await fetch(
+        `/api/mapbox/api/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?types=place,locality,neighborhood,address&limit=5`
+      );
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        setAutocompleteSuggestions(data.features);
+        setShowAutocomplete(true);
+      } else {
+        setAutocompleteSuggestions([]);
+        setShowAutocomplete(false);
+      }
+    } catch (error) {
+      console.error('Error searching locations:', error);
+      setAutocompleteSuggestions([]);
+      setShowAutocomplete(false);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle location input change with debounced autocomplete
+  const handleLocationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLocationName(value);
+    setIsUserTyping(true);
+    
+    // Clear existing timeout
+    if (autocompleteTimeoutRef.current) {
+      clearTimeout(autocompleteTimeoutRef.current);
+    }
+    
+    // Debounce the search
+    autocompleteTimeoutRef.current = setTimeout(() => {
+      searchLocations(value);
+      setIsUserTyping(false);
+    }, 300);
+  };
+
+  // Handle selecting an autocomplete suggestion
+  const handleSelectSuggestion = (feature: any) => {
+    const [longitude, latitude] = feature.center;
+    setLng(longitude);
+    setLat(latitude);
+    setLocationName(feature.place_name || feature.text);
+    setShowAutocomplete(false);
+    setAutocompleteSuggestions([]);
+  };
+
+  // Update location name when coordinates change (only if not typing)
+  useEffect(() => {
+    if (lat && lng && !isUserTyping) {
+      reverseGeocode(lat, lng);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lng]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autocompleteTimeoutRef.current) {
+        clearTimeout(autocompleteTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Update location when initialLocation changes
+  useEffect(() => {
+    if (initialLocation) {
+      setLat(initialLocation.lat);
+      setLng(initialLocation.lng);
+    }
+  }, [initialLocation]);
+
+  // Try to get user's current location when modal opens (if permission already granted)
+  // Only if we don't have a good initialLocation (i.e., it's the default map center)
+  useEffect(() => {
+    if (isOpen && !hasTriedAutoLocation && navigator.geolocation) {
+      // Check if initialLocation looks like a default/center location (not user's actual location)
+      const isDefaultLocation = 
+        !initialLocation || 
+        (initialLocation.lat === 37.7749 && initialLocation.lng === -122.4194) || // San Francisco default
+        (initialLocation.lat === 48.8566 && initialLocation.lng === 2.3522); // Paris default
+      
+      if (isDefaultLocation) {
+        setHasTriedAutoLocation(true);
+        // Try to get location without showing permission prompt (if already granted)
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setLat(latitude);
+            setLng(longitude);
+          },
+          () => {
+            // If permission not granted or error, use initialLocation or default
+            // Don't show error, just silently fail
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 2000, // Short timeout to fail fast if permission not granted
+            maximumAge: 60000, // Accept location up to 1 minute old
+          }
+        );
+      } else {
+        // We have a good initialLocation, mark as tried so we don't override it
+        setHasTriedAutoLocation(true);
+      }
+    }
+    
+    // Reset flag when modal closes
+    if (!isOpen) {
+      setHasTriedAutoLocation(false);
+    }
+  }, [isOpen, hasTriedAutoLocation, initialLocation]);
 
   if (!isOpen) return null;
 
@@ -45,21 +227,24 @@ export default function AddPinModal({
       return;
     }
 
+    if (files.length === 0) {
+      alert('Please add at least one photo or video');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await onSubmit({
         lat,
         lng,
-        title: title || undefined,
-        description: description || undefined,
+        title: locationName || undefined,
+        description: caption || undefined,
         dateTaken: dateTaken || new Date().toISOString().split('T')[0],
         files,
       });
 
       // Reset form
-      setStep(1);
-      setTitle('');
-      setDescription('');
+      setCaption('');
       setDateTaken(new Date().toISOString().split('T')[0]);
       setFiles([]);
       onClose();
@@ -80,7 +265,7 @@ export default function AddPinModal({
         },
         (error) => {
           console.error('Error getting location:', error);
-          alert('Could not get your location. Please select manually.');
+          alert('Could not get your location. Please try again.');
         }
       );
     } else {
@@ -89,177 +274,138 @@ export default function AddPinModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black bg-opacity-50 sm:items-center sm:justify-center">
-      <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Add New Pin</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+    <div className="fixed inset-0 z-50 bg-white overflow-y-auto text-gray-900">
+      {/* Status Bar */}
+      <div className="absolute top-0 left-0 right-0 z-50 h-6 bg-white flex items-center justify-between px-4 text-xs text-gray-600">
+        <span>9:41</span>
+        <div className="flex items-center gap-1">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+          </svg>
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M17.778 8.222c-4.296-4.296-11.26-4.296-15.556 0A1 1 0 01.808 6.808c5.076-5.076 13.308-5.076 18.384 0a1 1 0 01-1.414 1.414zM14.95 11.05a7 7 0 00-9.9 0 1 1 0 01-1.414-1.414 9 9 0 0112.728 0 1 1 0 01-1.414 1.414zM12.12 13.88a3 3 0 00-4.242 0 1 1 0 01-1.415-1.415 5 5 0 017.072 0 1 1 0 01-1.415 1.415zM9 16a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+          </svg>
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="p-6">
-          {/* Step 1: Location */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Choose Location</h3>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Latitude
-                </label>
-                <input
-                  type="number"
-                  value={lat}
-                  onChange={(e) => setLat(parseFloat(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  step="any"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Longitude
-                </label>
-                <input
-                  type="number"
-                  value={lng}
-                  onChange={(e) => setLng(parseFloat(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  step="any"
-                />
-              </div>
+      {/* Navigation Bar */}
+      <div className="absolute top-6 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={onClose}
+          className="text-blue-600 font-medium text-base hover:text-blue-700"
+        >
+          Cancel
+        </button>
+        <h1 className="text-lg font-semibold text-gray-900">Add Photo</h1>
+        <div className="w-16" /> {/* Spacer for centering */}
+      </div>
+
+      {/* Form Content */}
+      <div className="pt-[73px] pb-24 px-4">
+        <div className="max-w-md mx-auto space-y-6 pt-6">
+          {/* Location */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-gray-900">
+              Location
+            </label>
+            <div className="relative">
+              <input
+                ref={locationInputRef}
+                type="text"
+                value={isLoadingLocation ? 'Loading...' : locationName}
+                onChange={handleLocationInputChange}
+                onFocus={() => {
+                  if (autocompleteSuggestions.length > 0) {
+                    setShowAutocomplete(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding autocomplete to allow clicking on suggestions
+                  setTimeout(() => setShowAutocomplete(false), 200);
+                }}
+                className="w-full px-3 py-2 pr-32 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
+                placeholder="Enter location"
+              />
               <button
                 onClick={getCurrentLocation}
-                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-blue-600 font-medium text-sm hover:text-blue-700 whitespace-nowrap"
               >
-                Use Current Location
+                <svg
+                  className="w-4 h-4 text-gray-700"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span className="text-blue-600">Use My Location</span>
               </button>
-              <div className="flex gap-2 pt-4">
-                <button
-                  onClick={onClose}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => setStep(2)}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Next
-                </button>
-              </div>
+              
+              {/* Autocomplete Dropdown */}
+              {showAutocomplete && autocompleteSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {autocompleteSuggestions.map((feature, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSelectSuggestion(feature)}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                    >
+                      <div className="font-medium text-gray-900">{feature.text}</div>
+                      <div className="text-sm text-gray-600">{feature.place_name}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {isSearching && (
+                <div className="absolute right-36 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* Step 2: Details */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Add Details</h3>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Title (optional)
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., Paris Trip"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Description (optional)
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add a description..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={dateTaken}
-                  onChange={(e) => setDateTaken(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="flex gap-2 pt-4">
-                <button
-                  onClick={() => setStep(1)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setStep(3)}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Media */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Add Photos/Videos</h3>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                onChange={handleFileSelect}
-                className="hidden"
-              />
+          {/* Photo */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-gray-900">
+              Photo
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            {files.length === 0 ? (
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                className="w-full px-4 py-12 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors flex flex-col items-center justify-center gap-3"
               >
-                <div className="flex flex-col items-center gap-2">
-                  <svg
-                    className="w-8 h-8 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4v16m8-8H4"
-                    />
-                  </svg>
-                  <span className="text-sm text-gray-600">
-                    Select photos or videos
-                  </span>
-                </div>
+                <svg
+                  className="w-12 h-12 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <span className="text-sm text-gray-600 font-medium">Tap to upload</span>
               </button>
-
-              {files.length > 0 && (
+            ) : (
+              <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-2">
                   {files.map((file, index) => (
                     <div key={index} className="relative aspect-square">
@@ -284,28 +430,56 @@ export default function AddPinModal({
                     </div>
                   ))}
                 </div>
-              )}
-
-              <div className="flex gap-2 pt-4">
                 <button
-                  onClick={() => setStep(2)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm text-gray-700"
                 >
-                  Back
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Creating...' : 'Create Pin'}
+                  Add More Photos
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Caption */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-gray-900">
+              Caption
+            </label>
+            <input
+              type="text"
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Enter a caption"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
+            />
+          </div>
+
+          {/* Date */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-gray-900">
+              Date
+            </label>
+            <input
+              type="date"
+              value={dateTaken}
+              onChange={(e) => setDateTaken(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+            />
+            <p className="text-xs text-gray-600">{formatDate(dateTaken)}</p>
+          </div>
         </div>
+      </div>
+
+      {/* Add Button */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 p-4">
+        <button
+          onClick={handleSubmit}
+          disabled={isSubmitting || files.length === 0}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-base"
+        >
+          {isSubmitting ? 'Adding...' : 'Add'}
+        </button>
       </div>
     </div>
   );
 }
-

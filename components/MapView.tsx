@@ -12,6 +12,7 @@ interface MapViewProps {
   onPinClick: (pinId: string) => void;
   highlightedPinId?: string;
   polylinePoints?: [number, number][];
+  userLocation?: { latitude: number; longitude: number };
   initialViewState?: {
     longitude: number;
     latitude: number;
@@ -29,12 +30,14 @@ export default function MapView({
   onPinClick,
   highlightedPinId,
   polylinePoints,
+  userLocation,
   initialViewState,
   onViewStateChange,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const userLocationMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const isProgrammaticUpdate = useRef(false);
   const isDragging = useRef(false);
@@ -279,6 +282,40 @@ export default function MapView({
       markersRef.current.push(marker);
     });
   }, [pins, highlightedPinId, isMapLoaded, onPinClick]);
+
+  // Update user location marker
+  useEffect(() => {
+    if (!map.current || !isMapLoaded) return;
+
+    // Remove existing user location marker
+    if (userLocationMarkerRef.current) {
+      userLocationMarkerRef.current.remove();
+      userLocationMarkerRef.current = null;
+    }
+
+    // Add user location marker if location is available
+    if (userLocation) {
+      const el = document.createElement('div');
+      el.className = 'user-location-marker';
+      el.innerHTML = `
+        <div class="relative">
+          <div class="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-lg"></div>
+          <div class="absolute inset-0 w-4 h-4 rounded-full bg-blue-600 opacity-30 animate-ping"></div>
+        </div>
+      `;
+
+      userLocationMarkerRef.current = new mapboxgl.Marker(el)
+        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .addTo(map.current);
+    }
+
+    return () => {
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+        userLocationMarkerRef.current = null;
+      }
+    };
+  }, [userLocation, isMapLoaded]);
 
   // Update polyline when polylinePoints change
   useEffect(() => {

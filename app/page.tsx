@@ -32,11 +32,23 @@ export default function Home() {
     latitude: 37.7749,
     zoom: 10,
   });
+  const [hasRequestedLocation, setHasRequestedLocation] = useState(false);
+  const [hasUserLocation, setHasUserLocation] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
 
   // Check auth status and load pins
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Request location permission and center map when user logs in
+  useEffect(() => {
+    if (user && !hasRequestedLocation) {
+      requestUserLocation();
+      setHasRequestedLocation(true);
+    }
+  }, [user, hasRequestedLocation]);
 
   // Load pins when user changes
   useEffect(() => {
@@ -61,6 +73,37 @@ export default function Home() {
     return () => subscription.unsubscribe();
   };
 
+  const requestUserLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          // Store user location for marker
+          setUserLocation({ latitude, longitude });
+          // Center map on user's current location
+          setMapViewState({
+            longitude,
+            latitude,
+            zoom: 12, // Closer zoom for current location
+          });
+          setHasUserLocation(true);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          // If permission denied or error, keep default location
+          // Don't show alert as it might be annoying
+          setHasUserLocation(false);
+          setUserLocation(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0, // Always get fresh location
+        }
+      );
+    }
+  };
+
   const loadPins = async () => {
     if (!user) return;
     
@@ -69,12 +112,29 @@ export default function Home() {
       const userPins = await getPinsForUser();
       setPins(userPins);
       
+      // Extract available years from pins
+      const years = new Set<number>();
+      userPins.forEach((pin) => {
+        if (pin.date_taken) {
+          const year = new Date(pin.date_taken).getFullYear();
+          years.add(year);
+        }
+      });
+      const sortedYears = Array.from(years).sort((a, b) => b - a); // Most recent first
+      setAvailableYears(sortedYears);
+      
+      // Set selected year to most recent year if available
+      if (sortedYears.length > 0 && !availableYears.includes(selectedYear)) {
+        setSelectedYear(sortedYears[0]);
+      }
+      
       // Load recent media
       const recent = await getRecentMedia(20);
       setRecentMedia(recent);
       
       // Update map view to show all pins if we have any
-      if (userPins.length > 0) {
+      // Only update if we haven't already set location from user's current position
+      if (userPins.length > 0 && !hasUserLocation) {
         const avgLat = userPins.reduce((sum, p) => sum + p.lat, 0) / userPins.length;
         const avgLng = userPins.reduce((sum, p) => sum + p.lng, 0) / userPins.length;
         setMapViewState({
@@ -205,30 +265,33 @@ export default function Home() {
 
       {/* Navigation Bar */}
       <div className="absolute top-6 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <button
-          className="p-2 -ml-2 text-gray-600 hover:text-gray-900"
-          aria-label="Back"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {availableYears.length > 0 ? (
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              disabled={isRecapMode}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="px-3 py-1.5 text-sm text-gray-500">No pins yet</div>
+          )}
+        </div>
         <h1 className="text-lg font-semibold text-gray-900">Add Your Memories</h1>
         <button
           onClick={() => {
-            setSelectedYear(new Date().getFullYear());
             handleStartRecap();
           }}
-          className="text-blue-600 font-medium text-sm hover:text-blue-700"
+          disabled={isRecapMode || availableYears.length === 0}
+          className="text-blue-600 font-medium text-sm hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          View Year
+          View Recap
         </button>
       </div>
 
@@ -249,6 +312,7 @@ export default function Home() {
             onPinClick={handlePinClick}
             highlightedPinId={highlightedPinId}
             polylinePoints={polylinePoints}
+            userLocation={userLocation || undefined}
             initialViewState={mapViewState}
             onViewStateChange={setMapViewState}
           />
@@ -276,10 +340,17 @@ export default function Home() {
         isOpen={isAddPinOpen}
         onClose={() => setIsAddPinOpen(false)}
         onSubmit={handleAddPin}
-        initialLocation={{
-          lat: mapViewState.latitude,
-          lng: mapViewState.longitude,
-        }}
+        initialLocation={
+          userLocation
+            ? {
+                lat: userLocation.latitude,
+                lng: userLocation.longitude,
+              }
+            : {
+                lat: mapViewState.latitude,
+                lng: mapViewState.longitude,
+              }
+        }
       />
 
       {/* Pin Details Modal */}
