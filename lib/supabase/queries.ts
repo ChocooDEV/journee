@@ -238,3 +238,48 @@ export async function createPinWithMedia({
   };
 }
 
+/**
+ * Get recent media items from all pins, ordered by creation date
+ */
+export async function getRecentMedia(limit: number = 20): Promise<PinMedia[]> {
+  const supabase = createClient();
+  
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return [];
+  }
+  
+  // Get all pins for the user
+  const { data: pins, error: pinsError } = await supabase
+    .from('pins')
+    .select('id')
+    .eq('user_id', user.id);
+
+  if (pinsError || !pins) {
+    console.error('Error fetching pins:', pinsError);
+    return [];
+  }
+
+  const pinIds = pins.map(p => p.id);
+
+  if (pinIds.length === 0) {
+    return [];
+  }
+
+  // Get recent media from all pins
+  const { data: media, error: mediaError } = await supabase
+    .from('pin_media')
+    .select('*')
+    .in('pin_id', pinIds)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (mediaError) {
+    console.error('Error fetching recent media:', mediaError);
+    return [];
+  }
+
+  return media || [];
+}
+

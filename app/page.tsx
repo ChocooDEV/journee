@@ -8,10 +8,11 @@ import PinDetailsModal from '@/components/PinDetailsModal';
 import YearRecapControls from '@/components/YearRecapControls';
 import YearRecapOverlay from '@/components/YearRecapOverlay';
 import LandingPage from '@/components/LandingPage';
-import { getPinsForUser, getPinWithMedia, createPinWithMedia, getPinsForYear } from '@/lib/supabase/queries';
+import { getPinsForUser, getPinWithMedia, createPinWithMedia, getPinsForYear, getRecentMedia } from '@/lib/supabase/queries';
 import { createClient } from '@/lib/supabase/client-browser';
-import type { PinWithThumbnail, PinWithMedia, CreatePinData } from '@/types';
+import type { PinWithThumbnail, PinWithMedia, CreatePinData, PinMedia } from '@/types';
 import type { User } from '@supabase/supabase-js';
+import RecentMedia from '@/components/RecentMedia';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -25,6 +26,7 @@ export default function Home() {
   const [recapPins, setRecapPins] = useState<PinWithMedia[]>([]);
   const [recapIndex, setRecapIndex] = useState(0);
   const [isRecapPlaying, setIsRecapPlaying] = useState(false);
+  const [recentMedia, setRecentMedia] = useState<PinMedia[]>([]);
   const [mapViewState, setMapViewState] = useState({
     longitude: -122.4194,
     latitude: 37.7749,
@@ -67,6 +69,10 @@ export default function Home() {
       const userPins = await getPinsForUser();
       setPins(userPins);
       
+      // Load recent media
+      const recent = await getRecentMedia(20);
+      setRecentMedia(recent);
+      
       // Update map view to show all pins if we have any
       if (userPins.length > 0) {
         const avgLat = userPins.reduce((sum, p) => sum + p.lat, 0) / userPins.length;
@@ -99,11 +105,23 @@ export default function Home() {
   const handleAddPin = async (data: CreatePinData) => {
     try {
       await createPinWithMedia(data);
-      await loadPins(); // Reload pins
+      await loadPins(); // Reload pins and recent media
       setIsAddPinOpen(false);
     } catch (error) {
       console.error('Error creating pin:', error);
       throw error; // Re-throw so modal can handle it
+    }
+  };
+
+  const handleRecentMediaClick = async (media: PinMedia) => {
+    try {
+      const pinWithMedia = await getPinWithMedia(media.pin_id);
+      if (pinWithMedia) {
+        setSelectedPin(pinWithMedia);
+        setIsPinDetailsOpen(true);
+      }
+    } catch (error) {
+      console.error('Error loading pin details:', error);
     }
   };
 
@@ -138,9 +156,11 @@ export default function Home() {
     setRecapIndex(0);
   };
 
-  // Get polyline points for recap mode
+  // Get polyline points - show route for all pins or recap pins
   const polylinePoints: [number, number][] | undefined = isRecapMode
     ? recapPins.map((pin) => [pin.lng, pin.lat])
+    : pins.length > 0
+    ? pins.map((pin) => [pin.lng, pin.lat])
     : undefined;
 
   // Get highlighted pin ID for recap mode
@@ -166,29 +186,56 @@ export default function Home() {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
-      {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
-        <h1 className="text-xl font-bold text-gray-900">Journee</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-600 hidden sm:inline">{user.email}</span>
-          <button
-            onClick={handleSignOut}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
-          >
-            Sign Out
-          </button>
-          <YearRecapControls
-            selectedYear={selectedYear}
-            onYearChange={setSelectedYear}
-            onStartRecap={handleStartRecap}
-            isRecapActive={isRecapMode}
-          />
+    <div className="relative h-screen w-screen overflow-hidden bg-white">
+      {/* Status Bar (for mobile) */}
+      <div className="absolute top-0 left-0 right-0 z-50 h-6 bg-white flex items-center justify-between px-4 text-xs text-gray-600">
+        <span>9:41</span>
+        <div className="flex items-center gap-1">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+          </svg>
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M17.778 8.222c-4.296-4.296-11.26-4.296-15.556 0A1 1 0 01.808 6.808c5.076-5.076 13.308-5.076 18.384 0a1 1 0 01-1.414 1.414zM14.95 11.05a7 7 0 00-9.9 0 1 1 0 01-1.414-1.414 9 9 0 0112.728 0 1 1 0 01-1.414 1.414zM12.12 13.88a3 3 0 00-4.242 0 1 1 0 01-1.415-1.415 5 5 0 017.072 0 1 1 0 01-1.415 1.415zM9 16a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+          </svg>
         </div>
       </div>
 
+      {/* Navigation Bar */}
+      <div className="absolute top-6 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <button
+          className="p-2 -ml-2 text-gray-600 hover:text-gray-900"
+          aria-label="Back"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="text-lg font-semibold text-gray-900">Add Your Memories</h1>
+        <button
+          onClick={() => {
+            setSelectedYear(new Date().getFullYear());
+            handleStartRecap();
+          }}
+          className="text-blue-600 font-medium text-sm hover:text-blue-700"
+        >
+          View Year
+        </button>
+      </div>
+
       {/* Map View */}
-      <div className="absolute top-14 bottom-0 left-0 right-0">
+      <div className={`absolute left-0 right-0 ${
+        recentMedia.length > 0 ? 'top-[73px] bottom-[200px]' : 'top-[73px] bottom-[120px]'
+      }`}>
         {isLoading ? (
           <div className="flex h-full w-full items-center justify-center bg-gray-100">
             <div className="text-center">
@@ -210,7 +257,17 @@ export default function Home() {
 
       {/* Add Pin Button */}
       {!isRecapMode && user && (
-        <AddPinButton onClick={() => setIsAddPinOpen(true)} />
+        <AddPinButton 
+          onClick={() => setIsAddPinOpen(true)}
+        />
+      )}
+
+      {/* Recent Media */}
+      {!isRecapMode && user && recentMedia.length > 0 && (
+        <RecentMedia 
+          media={recentMedia} 
+          onMediaClick={handleRecentMediaClick}
+        />
       )}
 
 

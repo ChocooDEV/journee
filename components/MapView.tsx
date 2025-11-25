@@ -37,6 +37,12 @@ export default function MapView({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const isProgrammaticUpdate = useRef(false);
+  const isDragging = useRef(false);
+  const moveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pointerHandlersRef = useRef<{
+    handlePointerDown: () => void;
+    handlePointerUp: () => void;
+  } | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -121,8 +127,14 @@ export default function MapView({
       setIsMapLoaded(true);
     });
 
-    map.current.on('move', () => {
-      // Only call onViewStateChange if this is a user-initiated move, not programmatic
+    // Track pointer events to detect dragging
+    const handlePointerDown = () => {
+      isDragging.current = true;
+    };
+
+    const handlePointerUp = () => {
+      isDragging.current = false;
+      // Update state immediately when drag ends
       if (map.current && onViewStateChange && !isProgrammaticUpdate.current) {
         const center = map.current.getCenter();
         const zoom = map.current.getZoom();
@@ -132,9 +144,59 @@ export default function MapView({
           zoom,
         });
       }
+    };
+
+    // Store handlers in ref for cleanup
+    pointerHandlersRef.current = {
+      handlePointerDown,
+      handlePointerUp,
+    };
+
+    // Add pointer event listeners to the map container
+    const container = mapContainer.current;
+    if (container) {
+      container.addEventListener('pointerdown', handlePointerDown);
+      container.addEventListener('pointerup', handlePointerUp);
+      container.addEventListener('pointercancel', handlePointerUp);
+    }
+
+    // Debounce move events to avoid interrupting drag
+    map.current.on('move', () => {
+      // Only call onViewStateChange if this is a user-initiated move, not programmatic
+      // And only if not currently dragging (to allow continuous drag)
+      if (map.current && onViewStateChange && !isProgrammaticUpdate.current && !isDragging.current) {
+        // Clear any pending timeout
+        if (moveTimeoutRef.current) {
+          clearTimeout(moveTimeoutRef.current);
+        }
+        
+        // Debounce the state update
+        moveTimeoutRef.current = setTimeout(() => {
+          if (map.current && !isDragging.current) {
+            const center = map.current.getCenter();
+            const zoom = map.current.getZoom();
+            onViewStateChange({
+              longitude: center.lng,
+              latitude: center.lat,
+              zoom,
+            });
+          }
+        }, 100);
+      }
     });
 
     return () => {
+      if (moveTimeoutRef.current) {
+        clearTimeout(moveTimeoutRef.current);
+      }
+      // Remove pointer event listeners
+      const container = mapContainer.current;
+      const handlers = pointerHandlersRef.current;
+      if (container && handlers) {
+        container.removeEventListener('pointerdown', handlers.handlePointerDown);
+        container.removeEventListener('pointerup', handlers.handlePointerUp);
+        container.removeEventListener('pointercancel', handlers.handlePointerUp);
+      }
       if (map.current) {
         map.current.remove();
         map.current = null;
@@ -267,8 +329,9 @@ export default function MapView({
         },
         paint: {
           'line-color': '#3b82f6',
-          'line-width': 3,
-          'line-opacity': 0.7,
+          'line-width': 2,
+          'line-opacity': 0.8,
+          'line-dasharray': [2, 2],
         },
       });
     }
