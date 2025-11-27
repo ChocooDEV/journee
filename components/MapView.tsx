@@ -250,37 +250,54 @@ export default function MapView({
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    // Add new markers
-    pins.forEach((pin) => {
-      const el = document.createElement('div');
-      el.className = 'cursor-pointer';
+    // Add new markers with signed URLs
+    const createMarkers = async () => {
+      const { getSignedUrl } = await import('@/lib/supabase/storage-urls');
       
-      const isHighlighted = highlightedPinId === pin.id;
-      
-      el.innerHTML = `
-        <div class="relative transition-transform hover:scale-110 ${
-          isHighlighted ? 'scale-125 z-10' : ''
-        }">
-          <div class="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center ${
-            isHighlighted ? 'bg-blue-600' : 'bg-blue-500'
+      for (const pin of pins) {
+        const el = document.createElement('div');
+        el.className = 'cursor-pointer';
+        
+        const isHighlighted = highlightedPinId === pin.id;
+        
+        // Get signed URL for thumbnail if it exists
+        let thumbnailUrl: string | null = null;
+        if (pin.thumbnail_url) {
+          // Check if it's already a full URL (backward compatibility)
+          if (pin.thumbnail_url.startsWith('http://') || pin.thumbnail_url.startsWith('https://')) {
+            thumbnailUrl = pin.thumbnail_url;
+          } else {
+            thumbnailUrl = await getSignedUrl(pin.thumbnail_url);
+          }
+        }
+        
+        el.innerHTML = `
+          <div class="relative transition-transform hover:scale-110 ${
+            isHighlighted ? 'scale-125 z-10' : ''
           }">
-            ${
-              pin.thumbnail_url
-                ? `<img src="${pin.thumbnail_url}" alt="${pin.title || 'Pin'}" class="w-full h-full rounded-full object-cover" />`
-                : ''
-            }
+            <div class="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center ${
+              isHighlighted ? 'bg-blue-600' : 'bg-blue-500'
+            }">
+              ${
+                thumbnailUrl
+                  ? `<img src="${thumbnailUrl}" alt="${pin.title || 'Pin'}" class="w-full h-full rounded-full object-cover" />`
+                  : ''
+              }
+            </div>
           </div>
-        </div>
-      `;
+        `;
 
-      el.addEventListener('click', () => onPinClick(pin.id));
+        el.addEventListener('click', () => onPinClick(pin.id));
 
-      const marker = new mapboxgl.Marker(el)
-        .setLngLat([pin.lng, pin.lat])
-        .addTo(map.current!);
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([pin.lng, pin.lat])
+          .addTo(map.current!);
 
-      markersRef.current.push(marker);
-    });
+        markersRef.current.push(marker);
+      }
+    };
+
+    createMarkers();
   }, [pins, highlightedPinId, isMapLoaded, onPinClick]);
 
   // Update user location marker

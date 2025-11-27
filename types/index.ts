@@ -40,5 +40,6 @@ export interface CreatePinData {
   description?: string;
   dateTaken: string; // ISO date string
   files: File[];
+  videoThumbnails?: Map<File, File>; // Map of video file to its thumbnail
 }
 

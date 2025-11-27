@@ -297,7 +297,7 @@ export default function Home() {
 
       {/* Map View */}
       <div className={`absolute left-0 right-0 ${
-        recentMedia.length > 0 ? 'top-[73px] bottom-[200px]' : 'top-[73px] bottom-[120px]'
+        recentMedia.length > 0 ? 'top-[73px] bottom-[160px]' : 'top-[73px] bottom-[120px]'
       }`}>
         {isLoading ? (
           <div className="flex h-full w-full items-center justify-center bg-gray-100">
@@ -319,18 +319,19 @@ export default function Home() {
         )}
       </div>
 
-      {/* Add Pin Button */}
-      {!isRecapMode && user && (
-        <AddPinButton 
-          onClick={() => setIsAddPinOpen(true)}
-        />
-      )}
-
       {/* Recent Media */}
       {!isRecapMode && user && recentMedia.length > 0 && (
         <RecentMedia 
           media={recentMedia} 
           onMediaClick={handleRecentMediaClick}
+        />
+      )}
+
+      {/* Add Pin Button */}
+      {!isRecapMode && user && (
+        <AddPinButton 
+          onClick={() => setIsAddPinOpen(true)}
+          hasRecentMedia={recentMedia.length > 0}
         />
       )}
 

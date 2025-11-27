@@ -2,9 +2,40 @@
 
 import { useState } from 'react';
 import type { PinMedia } from '@/types';
+import { useSignedUrl } from '@/hooks/useSignedUrls';
 
 interface MediaCarouselProps {
   media: PinMedia[];
+}
+
+function ThumbnailImage({ 
+  thumbnailPath, 
+  mediaType, 
+  index 
+}: { 
+  thumbnailPath: string | null; 
+  mediaType: 'image' | 'video';
+  index: number;
+}) {
+  const signedUrl = useSignedUrl(thumbnailPath);
+  
+  if (!signedUrl) {
+    return (
+      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+        <span className="text-xs text-gray-500">
+          {mediaType === 'video' ? '🎥' : '📷'}
+        </span>
+      </div>
+    );
+  }
+  
+  return (
+    <img
+      src={signedUrl}
+      alt={`Thumbnail ${index + 1}`}
+      className="w-full h-full object-cover"
+    />
+  );
 }
 
 export default function MediaCarousel({ media }: MediaCarouselProps) {
@@ -13,6 +44,8 @@ export default function MediaCarousel({ media }: MediaCarouselProps) {
   if (media.length === 0) return null;
 
   const currentMedia = media[currentIndex];
+  const mediaUrl = useSignedUrl(currentMedia.media_url);
+  const thumbnailUrl = useSignedUrl(currentMedia.thumbnail_url || currentMedia.media_url);
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => (prev === 0 ? media.length - 1 : prev - 1));
@@ -26,15 +59,19 @@ export default function MediaCarousel({ media }: MediaCarouselProps) {
     <div className="relative w-full">
       {/* Main Media Display */}
       <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
-        {currentMedia.media_type === 'video' ? (
+        {!mediaUrl ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : currentMedia.media_type === 'video' ? (
           <video
-            src={currentMedia.media_url}
+            src={mediaUrl}
             controls
             className="w-full h-full object-contain"
           />
         ) : (
           <img
-            src={currentMedia.media_url}
+            src={mediaUrl}
             alt={`Media ${currentIndex + 1}`}
             className="w-full h-full object-contain"
           />
@@ -116,19 +153,11 @@ export default function MediaCarousel({ media }: MediaCarouselProps) {
                   : 'border-transparent opacity-60 hover:opacity-100'
               }`}
             >
-              {item.thumbnail_url || item.media_url ? (
-                <img
-                  src={item.thumbnail_url || item.media_url}
-                  alt={`Thumbnail ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                  <span className="text-xs text-gray-500">
-                    {item.media_type === 'video' ? '🎥' : '📷'}
-                  </span>
-                </div>
-              )}
+              <ThumbnailImage 
+                thumbnailPath={item.thumbnail_url || item.media_url}
+                mediaType={item.media_type}
+                index={index}
+              />
             </button>
           ))}
         </div>
@@ -136,4 +165,3 @@ export default function MediaCarousel({ media }: MediaCarouselProps) {
     </div>
   );
 }
-

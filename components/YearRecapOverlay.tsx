@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { PinWithMedia } from '@/types';
+import { useSignedUrl } from '@/hooks/useSignedUrls';
 
 interface YearRecapOverlayProps {
   pins: PinWithMedia[];
@@ -10,6 +11,44 @@ interface YearRecapOverlayProps {
   onIndexChange: (index: number) => void;
   onPlayPause: () => void;
   onClose: () => void;
+}
+
+function MediaThumbnail({ 
+  media, 
+  alt 
+}: { 
+  media: PinWithMedia['media'][0] | undefined;
+  alt: string;
+}) {
+  const thumbnailUrl = useSignedUrl(media?.thumbnail_url || media?.media_url);
+  
+  if (!media || !thumbnailUrl) {
+    return (
+      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+        <span className="text-xs text-gray-500">
+          {media?.media_type === 'video' ? '🎥' : '📷'}
+        </span>
+      </div>
+    );
+  }
+
+  if (media.media_type === 'video') {
+    return (
+      <video
+        src={thumbnailUrl}
+        className="w-full h-full object-cover"
+        muted
+      />
+    );
+  }
+
+  return (
+    <img
+      src={thumbnailUrl}
+      alt={alt}
+      className="w-full h-full object-cover"
+    />
+  );
 }
 
 export default function YearRecapOverlay({
@@ -87,19 +126,10 @@ export default function YearRecapOverlay({
         <div className="flex gap-3 mb-3">
           {firstMedia && (
             <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
-              {firstMedia.media_type === 'video' ? (
-                <video
-                  src={firstMedia.thumbnail_url || firstMedia.media_url}
-                  className="w-full h-full object-cover"
-                  muted
-                />
-              ) : (
-                <img
-                  src={firstMedia.media_url}
-                  alt={currentPin.title || 'Pin'}
-                  className="w-full h-full object-cover"
-                />
-              )}
+              <MediaThumbnail 
+                media={firstMedia}
+                alt={currentPin.title || 'Pin'}
+              />
             </div>
           )}
           <div className="flex-1 min-w-0">

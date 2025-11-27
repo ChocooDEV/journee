@@ -5,11 +5,13 @@ interface AddPinButtonProps {
   hasRecentMedia?: boolean;
 }
 
-export default function AddPinButton({ onClick }: AddPinButtonProps) {
+export default function AddPinButton({ onClick, hasRecentMedia }: AddPinButtonProps) {
   return (
     <button
       onClick={onClick}
-      className="absolute left-0 right-0 bottom-0 z-40 bg-white rounded-t-2xl shadow-lg border-t border-gray-200 flex flex-col items-center justify-center py-6 transition-all hover:bg-gray-50 active:bg-gray-100"
+      className={`absolute left-0 right-0 z-40 bg-white rounded-t-2xl shadow-lg border-t border-gray-200 flex flex-col items-center justify-center py-6 transition-all hover:bg-gray-50 active:bg-gray-100 ${
+        hasRecentMedia ? 'bottom-[240px]' : 'bottom-0'
+      }`}
       aria-label="Add Photo or Video"
     >
       <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center mb-3 shadow-md">

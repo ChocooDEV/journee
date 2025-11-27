@@ -1,5 +1,12 @@
 import { createClient } from './client-browser';
 import type { Pin, PinMedia, PinWithMedia, PinWithThumbnail } from '@/types';
+import {
+  validateFiles,
+  generateFileName,
+  getFileMetadata,
+  MAX_IMAGE_SIZE,
+  MAX_VIDEO_SIZE,
+} from './storage-utils';
 
 const BUCKET_NAME = 'user-media';
 
@@ -138,6 +145,7 @@ export async function createPinWithMedia({
   description,
   dateTaken,
   files,
+  videoThumbnails,
 }: {
   lat: number;
   lng: number;
@@ -145,6 +153,7 @@ export async function createPinWithMedia({
   description?: string;
   dateTaken: string;
   files: File[];
+  videoThumbnails?: Map<File, File>;
 }): Promise<PinWithMedia> {
   const supabase = createClient();
   
@@ -177,59 +186,113 @@ export async function createPinWithMedia({
     throw new Error('Failed to create pin');
   }
 
-  // 2. Upload files and create media records
+  // 2. Validate all files before uploading
+  const validation = validateFiles(files);
+  if (!validation.valid) {
+    // Delete the pin if validation fails
+    await supabase.from('pins').delete().eq('id', pin.id);
+    throw new Error(`File validation failed:\n${validation.errors.join('\n')}`);
+  }
+
+  // 3. Upload files and create media records
   const mediaRecords: PinMedia[] = [];
+  const uploadedFiles: string[] = []; // Track uploaded files for cleanup on error
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${pin.id}/${Date.now()}-${i}.${fileExt}`;
-    const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const metadata = getFileMetadata(file);
+      const fileName = generateFileName(pin.id, i, file);
 
-    // Upload file
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+      // Upload file with better options
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        });
 
-    if (uploadError) {
-      console.error('Error uploading file:', uploadError);
-      continue;
+      if (uploadError) {
+        console.error('Error uploading file:', uploadError);
+        
+        // Provide helpful error message for common issues
+        let errorMessage = uploadError.message;
+        if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('not found')) {
+          errorMessage = `Storage bucket '${BUCKET_NAME}' not found. Please create it in your Supabase dashboard: Storage → New bucket → Name: "${BUCKET_NAME}" → Make it PRIVATE. See docs/SECURE_STORAGE_SETUP.md for setup instructions.`;
+        }
+        
+        // If upload fails, we'll clean up uploaded files
+        throw new Error(`Failed to upload ${file.name}: ${errorMessage}`);
+      }
+
+      uploadedFiles.push(fileName);
+
+      // Store the file path (not a URL) in the database
+      // We'll generate signed URLs when needed for security
+      const mediaUrl = fileName; // Store path, not URL
+      
+      // For videos, check if we have a thumbnail
+      let thumbnailUrl: string | null = null;
+      if (metadata.type === 'video' && videoThumbnails) {
+        const thumbnail = videoThumbnails.get(file);
+        if (thumbnail) {
+          // Upload thumbnail
+          const thumbnailFileName = generateFileName(pin.id, i, thumbnail);
+          const { error: thumbnailError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .upload(thumbnailFileName, thumbnail, {
+              cacheControl: '3600',
+              upsert: false,
+              contentType: 'image/jpeg',
+            });
+          
+          if (!thumbnailError) {
+            thumbnailUrl = thumbnailFileName;
+            uploadedFiles.push(thumbnailFileName);
+          } else {
+            console.error('Error uploading thumbnail:', thumbnailError);
+          }
+        }
+      } else if (metadata.type === 'image') {
+        // For images, use the image itself as thumbnail
+        thumbnailUrl = fileName;
+      }
+
+      // Create media record
+      const { data: media, error: mediaError } = await supabase
+        .from('pin_media')
+        .insert({
+          pin_id: pin.id,
+          media_url: mediaUrl,
+          thumbnail_url: thumbnailUrl,
+          media_type: metadata.type,
+          sort_order: i,
+        })
+        .select()
+        .single();
+
+      if (mediaError) {
+        console.error('Error creating media record:', mediaError);
+        // Clean up uploaded file if DB insert fails
+        await supabase.storage.from(BUCKET_NAME).remove([fileName]);
+        throw new Error(`Failed to create media record for ${file.name}: ${mediaError.message}`);
+      }
+
+      if (media) {
+        mediaRecords.push(media);
+      }
     }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(fileName);
-
-    const mediaUrl = urlData.publicUrl;
-
-    // For videos, we could generate a thumbnail later, but for now just use the URL
-    const thumbnailUrl = mediaType === 'video' ? null : mediaUrl;
-
-    // Create media record
-    const { data: media, error: mediaError } = await supabase
-      .from('pin_media')
-      .insert({
-        pin_id: pin.id,
-        media_url: mediaUrl,
-        thumbnail_url: thumbnailUrl,
-        media_type: mediaType,
-        sort_order: i,
-      })
-      .select()
-      .single();
-
-    if (mediaError) {
-      console.error('Error creating media record:', mediaError);
-      continue;
+  } catch (error) {
+    // Cleanup: Remove all uploaded files if something went wrong
+    if (uploadedFiles.length > 0) {
+      await supabase.storage.from(BUCKET_NAME).remove(uploadedFiles);
     }
-
-    if (media) {
-      mediaRecords.push(media);
+    // Delete the pin if no media was successfully created
+    if (mediaRecords.length === 0) {
+      await supabase.from('pins').delete().eq('id', pin.id);
     }
+    throw error;
   }
 
   return {
