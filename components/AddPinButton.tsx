@@ -9,8 +9,8 @@ export default function AddPinButton({ onClick, hasRecentMedia }: AddPinButtonPr
   return (
     <button
       onClick={onClick}
-      className={`absolute left-0 right-0 z-40 bg-white rounded-t-2xl shadow-lg border-t border-gray-200 flex flex-col items-center justify-center py-6 transition-all hover:bg-gray-50 active:bg-gray-100 ${
-        hasRecentMedia ? 'bottom-[240px]' : 'bottom-0'
+      className={`absolute left-4 right-4 z-40 bg-white rounded-2xl shadow-lg border border-gray-200 flex flex-col items-center justify-center pt-6 pb-4 transition-all hover:bg-gray-50 active:bg-gray-100 ${
+        hasRecentMedia ? 'bottom-[240px]' : 'bottom-2'
       }`}
       aria-label="Add Photo or Video"
     >

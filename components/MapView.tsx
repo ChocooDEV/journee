@@ -257,6 +257,8 @@ export default function MapView({
       for (const pin of pins) {
         const el = document.createElement('div');
         el.className = 'cursor-pointer';
+        el.style.pointerEvents = 'auto';
+        el.style.zIndex = '10';
         
         const isHighlighted = highlightedPinId === pin.id;
         
@@ -287,7 +289,14 @@ export default function MapView({
           </div>
         `;
 
-        el.addEventListener('click', () => onPinClick(pin.id));
+        const handleClick = (e: MouseEvent) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onPinClick(pin.id);
+        };
+        
+        el.addEventListener('click', handleClick);
+        el.addEventListener('mousedown', (e) => e.stopPropagation());
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([pin.lng, pin.lat])
