@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import MapView from '@/components/MapView';
 import AddPinButton from '@/components/AddPinButton';
 import AddPinModal from '@/components/AddPinModal';
@@ -36,6 +36,7 @@ export default function Home() {
   const [hasUserLocation, setHasUserLocation] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const hasCenteredOnUserLocationRef = useRef(false);
 
   // Check auth status and load pins
   useEffect(() => {
@@ -49,6 +50,25 @@ export default function Home() {
       setHasRequestedLocation(true);
     }
   }, [user, hasRequestedLocation]);
+
+  // Center map on user location when it becomes available
+  // This takes priority over pin centering
+  // Use a ref to track if we've already centered on user location to avoid multiple updates
+  useEffect(() => {
+    if (userLocation && hasUserLocation) {
+      // Mark that we've centered on user location - this prevents pin centering
+      hasCenteredOnUserLocationRef.current = true;
+      // Force update the map view state to center on user location
+      setMapViewState({
+        longitude: userLocation.longitude,
+        latitude: userLocation.latitude,
+        zoom: 12, // Closer zoom for current location
+      });
+    }
+  }, [userLocation, hasUserLocation]);
+
+  // Prevent pin centering if user location is available or being requested
+  // This ensures user location always takes priority
 
   // Load pins when user changes
   useEffect(() => {
@@ -80,13 +100,8 @@ export default function Home() {
           const { latitude, longitude } = position.coords;
           // Store user location for marker
           setUserLocation({ latitude, longitude });
-          // Center map on user's current location
-          setMapViewState({
-            longitude,
-            latitude,
-            zoom: 12, // Closer zoom for current location
-          });
           setHasUserLocation(true);
+          // Map centering will be handled by the useEffect that watches userLocation
         },
         (error) => {
           console.error('Error getting location:', error);
@@ -132,9 +147,10 @@ export default function Home() {
       const recent = await getRecentMedia(20);
       setRecentMedia(recent);
       
-      // Update map view to show all pins if we have any
-      // Only update if we haven't already set location from user's current position
-      if (userPins.length > 0 && !hasUserLocation) {
+      // Don't center on pins if user location is available or being requested
+      // User location should always take priority
+      // Only center on pins if we haven't centered on user location and location is not being requested
+      if (userPins.length > 0 && !hasCenteredOnUserLocationRef.current && !hasRequestedLocation) {
         const avgLat = userPins.reduce((sum, p) => sum + p.lat, 0) / userPins.length;
         const avgLng = userPins.reduce((sum, p) => sum + p.lng, 0) / userPins.length;
         setMapViewState({

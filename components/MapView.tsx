@@ -207,21 +207,39 @@ export default function MapView({
     };
   }, []);
 
+  // Track previous view state to detect changes
+  const prevViewStateRef = useRef<{ longitude: number; latitude: number; zoom: number } | null>(null);
+
   // Update map center when initialViewState changes
   useEffect(() => {
-    if (map.current && initialViewState) {
-      isProgrammaticUpdate.current = true;
-      map.current.setCenter([
-        initialViewState.longitude,
-        initialViewState.latitude,
-      ]);
-      map.current.setZoom(initialViewState.zoom);
-      // Reset flag after a short delay to allow move event to fire
-      setTimeout(() => {
-        isProgrammaticUpdate.current = false;
-      }, 100);
+    if (map.current && initialViewState && isMapLoaded) {
+      // Only update if the view state actually changed
+      const hasChanged = !prevViewStateRef.current ||
+        prevViewStateRef.current.longitude !== initialViewState.longitude ||
+        prevViewStateRef.current.latitude !== initialViewState.latitude ||
+        prevViewStateRef.current.zoom !== initialViewState.zoom;
+
+      if (hasChanged) {
+        isProgrammaticUpdate.current = true;
+        // Use flyTo for smoother transitions, especially when centering on user location
+        map.current.flyTo({
+          center: [initialViewState.longitude, initialViewState.latitude],
+          zoom: initialViewState.zoom,
+          duration: 1000,
+        });
+        // Update ref
+        prevViewStateRef.current = {
+          longitude: initialViewState.longitude,
+          latitude: initialViewState.latitude,
+          zoom: initialViewState.zoom,
+        };
+        // Reset flag after animation completes
+        setTimeout(() => {
+          isProgrammaticUpdate.current = false;
+        }, 1100);
+      }
     }
-  }, [initialViewState]);
+  }, [initialViewState, isMapLoaded]);
 
   // Pan to highlighted pin
   useEffect(() => {
