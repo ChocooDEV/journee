@@ -107,6 +107,21 @@ export default function AuthModal({
             placeholder="Password"
           />
 
+          {/* Terms and Conditions (Sign up only) */}
+          {!isLogin && (
+            <div className="text-xs text-gray-600 text-center">
+              By signing up, you agree to our{' '}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-black underline hover:text-gray-800"
+              >
+                General Conditions
+              </a>
+            </div>
+          )}
+
           {/* Log in Button */}
           <button
             type="submit"
