@@ -122,7 +122,7 @@ export async function processVideo(file: File): Promise<File> {
     ]);
 
     const data = await ffmpeg.readFile('output.mp4');
-    const blob = new Blob([data], { type: 'video/mp4' });
+    const blob = new Blob([data as BlobPart], { type: 'video/mp4' });
     
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile('output.mp4');
@@ -154,7 +154,7 @@ async function extractThumbnail(file: File, ffmpeg: FFmpeg): Promise<File | null
     ]);
 
     const data = await ffmpeg.readFile('thumbnail.jpg');
-    const blob = new Blob([data], { type: 'image/jpeg' });
+    const blob = new Blob([data as BlobPart], { type: 'image/jpeg' });
     
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile('thumbnail.jpg');
