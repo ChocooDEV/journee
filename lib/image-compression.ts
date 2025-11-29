@@ -18,13 +18,12 @@ export async function compressImage(
   options: CompressionOptions = {}
 ): Promise<File> {
   const {
-    maxSizeMB = 2, // Target 2MB (we allow up to 10MB, but compress to save space)
-    maxWidthOrHeight = 1920, // Max dimension (good for web display)
+    maxSizeMB = 2,
+    maxWidthOrHeight = 1920,
     useWebWorker = true,
     fileType = file.type,
   } = options;
 
-  // Only compress images, not videos
   if (!file.type.startsWith('image/')) {
     return file;
   }
@@ -35,22 +34,12 @@ export async function compressImage(
       maxWidthOrHeight,
       useWebWorker,
       fileType,
-      initialQuality: 0.85, // Good balance between quality and size
+      initialQuality: 0.85,
     });
-
-    // Log compression results
-    const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-    const compressedSizeMB = (compressedFile.size / (1024 * 1024)).toFixed(2);
-    const reduction = ((1 - compressedFile.size / file.size) * 100).toFixed(1);
-    
-    console.log(
-      `Image compressed: ${originalSizeMB}MB → ${compressedSizeMB}MB (${reduction}% reduction)`
-    );
 
     return compressedFile;
   } catch (error) {
     console.error('Error compressing image:', error);
-    // If compression fails, return original file
     return file;
   }
 }
@@ -71,12 +60,10 @@ export async function compressImages(
     const file = files[i];
     
     if (file.type.startsWith('image/')) {
-      // Compress images
       onProgress?.(i + 1, files.length);
       const compressed = await compressImage(file);
       compressedFiles.push(compressed);
     } else {
-      // Pass through videos unchanged
       compressedFiles.push(file);
     }
   }

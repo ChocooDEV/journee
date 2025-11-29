@@ -49,14 +49,12 @@ export default function AddPinModal({
   const autocompleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCancelledRef = useRef(false);
 
-  // Format date for display (e.g., "Mar 20, 2024")
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   };
 
-  // Reverse geocode coordinates to get location name (city and country)
   const reverseGeocode = async (latitude: number, longitude: number) => {
     try {
       setIsLoadingLocation(true);
@@ -67,7 +65,6 @@ export default function AddPinModal({
       
       if (data.features && data.features.length > 0) {
         try {
-          // Extract city and country from the place_name
           const cityFeature = data.features.find((feature: any) => feature.id.startsWith('place'));
           const countryFeature = data.features.find((feature: any) => feature.id.startsWith('country'));
           
@@ -79,7 +76,6 @@ export default function AddPinModal({
           } else if (city) {
             setLocationName(city);
           } else if (data.features[0].place_name) {
-            // Fallback to first part of place_name
             setLocationName(data.features[0].place_name.split(',')[0]);
           } else {
             setLocationName('Unknown Location');
@@ -99,7 +95,6 @@ export default function AddPinModal({
     }
   };
 
-  // Autocomplete search for locations
   const searchLocations = async (query: string) => {
     if (!query || query.length < 2) {
       setAutocompleteSuggestions([]);
@@ -130,25 +125,21 @@ export default function AddPinModal({
     }
   };
 
-  // Handle location input change with debounced autocomplete
   const handleLocationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setLocationName(value);
     setIsUserTyping(true);
     
-    // Clear existing timeout
     if (autocompleteTimeoutRef.current) {
       clearTimeout(autocompleteTimeoutRef.current);
     }
     
-    // Debounce the search
     autocompleteTimeoutRef.current = setTimeout(() => {
       searchLocations(value);
       setIsUserTyping(false);
     }, 300);
   };
 
-  // Handle selecting an autocomplete suggestion
   const handleSelectSuggestion = (feature: any) => {
     const [longitude, latitude] = feature.center;
     setLng(longitude);
@@ -158,7 +149,6 @@ export default function AddPinModal({
     setAutocompleteSuggestions([]);
   };
 
-  // Update location name when coordinates change (only if not typing)
   useEffect(() => {
     if (lat && lng && !isUserTyping) {
       reverseGeocode(lat, lng);
@@ -166,7 +156,6 @@ export default function AddPinModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng]);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (autocompleteTimeoutRef.current) {
@@ -175,71 +164,57 @@ export default function AddPinModal({
     };
   }, []);
 
-  // Update location when initialLocation changes
   useEffect(() => {
     if (isOpen && initialLocation) {
       setLat(initialLocation.lat);
       setLng(initialLocation.lng);
-      // Reverse geocode to get location name
       reverseGeocode(initialLocation.lat, initialLocation.lng);
     }
   }, [isOpen, initialLocation]);
 
-  // Try to get user's current location when modal opens (if permission already granted)
-  // Only if we don't have a good initialLocation (i.e., it's the default map center)
   useEffect(() => {
     if (isOpen && !hasTriedAutoLocation && navigator.geolocation) {
-      // Check if initialLocation looks like a default/center location (not user's actual location)
       const isDefaultLocation = 
         !initialLocation || 
-        (initialLocation.lat === 37.7749 && initialLocation.lng === -122.4194) || // San Francisco default
-        (initialLocation.lat === 48.8566 && initialLocation.lng === 2.3522); // Paris default
+        (initialLocation.lat === 37.7749 && initialLocation.lng === -122.4194) ||
+        (initialLocation.lat === 48.8566 && initialLocation.lng === 2.3522);
       
       if (isDefaultLocation) {
         setHasTriedAutoLocation(true);
-        // Try to get location without showing permission prompt (if already granted)
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
             setLat(latitude);
             setLng(longitude);
-            // Update location name
             await reverseGeocode(latitude, longitude);
           },
           () => {
-            // If permission not granted or error, use initialLocation or default
-            // Don't show error, just silently fail
             setIsLoadingLocation(false);
           },
           {
             enableHighAccuracy: true,
-            timeout: 2000, // Short timeout to fail fast if permission not granted
-            maximumAge: 60000, // Accept location up to 1 minute old
+            timeout: 2000,
+            maximumAge: 60000,
           }
         );
       } else {
-        // We have a good initialLocation, mark as tried so we don't override it
         setHasTriedAutoLocation(true);
       }
     }
     
-    // Reset flag when modal closes (cleanup is handled by handleCleanup)
     if (!isOpen) {
       setHasTriedAutoLocation(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, hasTriedAutoLocation]);
 
-  // Cleanup function to reset all state
   const handleCleanup = () => {
-    // Stop any ongoing processing
     isCancelledRef.current = true;
     setIsCompressing(false);
     setIsProcessingVideo(false);
     setCompressionProgress({ current: 0, total: 0 });
     setVideoProcessingProgress({ current: 0, total: 0, fileName: '', stage: 'loading', progress: 0 });
     
-    // Clear all form fields
     setFiles([]);
     setVideoThumbnails(new Map());
     setCaption('');
@@ -251,38 +226,30 @@ export default function AddPinModal({
     setIsSearching(false);
     setIsLoadingLocation(false);
     
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     
-    // Reset location input
     if (locationInputRef.current) {
       locationInputRef.current.value = '';
     }
     
-    // Reset location to initialLocation if available
     if (initialLocation) {
       setLat(initialLocation.lat);
       setLng(initialLocation.lng);
     }
   };
 
-  // Handle close with cleanup
   const handleClose = () => {
     handleCleanup();
     onClose();
   };
 
-  // Cleanup when modal closes
   useEffect(() => {
     if (!isOpen) {
-      // Set cancellation flag first to stop any ongoing processing
       isCancelledRef.current = true;
-      // Then cleanup all state
       handleCleanup();
     } else {
-      // Reset cancellation flag when modal opens (for new operations)
       isCancelledRef.current = false;
     }
   }, [isOpen]);
@@ -328,7 +295,6 @@ export default function AddPinModal({
     const hasImages = selectedFiles.some(file => file.type.startsWith('image/'));
     const hasVideos = selectedFiles.some(file => file.type.startsWith('video/'));
 
-    // Process images (compress)
     if (hasImages && !isCancelledRef.current) {
       setIsCompressing(true);
       setCompressionProgress({ current: 0, total: selectedFiles.length });
@@ -337,7 +303,6 @@ export default function AddPinModal({
         processedFiles = await compressImages(
           processedFiles,
           (current, total) => {
-            // Check if cancelled during processing
             if (isCancelledRef.current) {
               throw new Error('Processing cancelled');
             }
@@ -346,13 +311,11 @@ export default function AddPinModal({
         );
       } catch (error: any) {
         if (error.message === 'Processing cancelled') {
-          // User cancelled, don't add files
           setIsCompressing(false);
           setCompressionProgress({ current: 0, total: 0 });
           return;
         }
         console.error('Error compressing images:', error);
-        // Continue with original files if compression fails
       } finally {
         if (!isCancelledRef.current) {
           setIsCompressing(false);
@@ -361,12 +324,10 @@ export default function AddPinModal({
       }
     }
     
-    // Check if cancelled before video processing
     if (isCancelledRef.current) {
       return;
     }
 
-    // Process videos (trim to 10s, compress, and extract thumbnails)
     if (hasVideos && !isCancelledRef.current) {
       setIsProcessingVideo(true);
       const videoFiles = processedFiles.filter(f => f.type.startsWith('video/'));
@@ -382,16 +343,13 @@ export default function AddPinModal({
       try {
         const newThumbnails = new Map<File, File>();
         
-        // Process each video and extract thumbnail
         for (let i = 0; i < videoFiles.length; i++) {
           const videoFile = videoFiles[i];
           
-          // Check if cancelled
           if (isCancelledRef.current) {
             throw new Error('Processing cancelled');
           }
           
-          // Stage 1: Loading FFmpeg (if first video)
           if (i === 0) {
             setVideoProcessingProgress({ 
               current: i + 1, 
@@ -402,48 +360,42 @@ export default function AddPinModal({
             });
           }
           
-          // Stage 2: Processing video (trimming and compressing)
           setVideoProcessingProgress({ 
             current: i + 1, 
             total: videoFiles.length, 
             fileName: videoFile.name,
             stage: 'processing',
-            progress: 10 + (i / videoFiles.length) * 60 // 10-70% for processing
+            progress: 10 + (i / videoFiles.length) * 60
           });
           
           const { video, thumbnail } = await processVideoWithThumbnail(videoFile);
           
-          // Stage 3: Extracting thumbnail
           setVideoProcessingProgress({ 
             current: i + 1, 
             total: videoFiles.length, 
             fileName: videoFile.name,
             stage: 'thumbnail',
-            progress: 70 + (i / videoFiles.length) * 25 // 70-95% for thumbnail
+            progress: 70 + (i / videoFiles.length) * 25
           });
           
-          // Replace original video with processed video
           const videoIndex = processedFiles.indexOf(videoFile);
           if (videoIndex !== -1) {
             processedFiles[videoIndex] = video;
           }
           
-          // Store thumbnail if extracted
           if (thumbnail) {
             newThumbnails.set(video, thumbnail);
           }
           
-          // Stage 4: Complete for this video
           setVideoProcessingProgress({ 
             current: i + 1, 
             total: videoFiles.length, 
             fileName: videoFile.name,
             stage: 'complete',
-            progress: 95 + ((i + 1) / videoFiles.length) * 5 // 95-100% when done
+            progress: 95 + ((i + 1) / videoFiles.length) * 5
           });
         }
         
-        // Update thumbnails map
         setVideoThumbnails(prev => {
           const updated = new Map(prev);
           newThumbnails.forEach((thumb, video) => {
@@ -453,7 +405,6 @@ export default function AddPinModal({
         });
       } catch (error: any) {
         if (error.message === 'Processing cancelled') {
-          // User cancelled, don't add files
           setIsProcessingVideo(false);
           setVideoProcessingProgress({ current: 0, total: 0, fileName: '', stage: 'loading', progress: 0 });
           return;
@@ -462,13 +413,12 @@ export default function AddPinModal({
         if (!isCancelledRef.current) {
           alert('Video processing failed. Please try uploading a shorter video or a different format.');
         }
-        // Reset input on error
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
         setIsProcessingVideo(false);
         setVideoProcessingProgress({ current: 0, total: 0, fileName: '', stage: 'loading', progress: 0 });
-        return; // Don't add files if processing failed
+        return;
       } finally {
         if (!isCancelledRef.current) {
           setIsProcessingVideo(false);
@@ -477,12 +427,10 @@ export default function AddPinModal({
       }
     }
     
-    // Only add files if not cancelled
     if (!isCancelledRef.current) {
       setFiles((prev) => [...prev, ...processedFiles]);
     }
     
-    // Reset input so same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -503,7 +451,6 @@ export default function AddPinModal({
       return;
     }
 
-    // Validate files before submitting
     const { validateFiles } = await import('@/lib/supabase/storage-utils');
     const validation = validateFiles(files);
     if (!validation.valid) {
@@ -523,7 +470,6 @@ export default function AddPinModal({
         videoThumbnails,
       });
 
-      // Reset form
       setCaption('');
       setDateTaken(new Date().toISOString().split('T')[0]);
       setFiles([]);
@@ -544,7 +490,6 @@ export default function AddPinModal({
           const { latitude, longitude } = position.coords;
           setLat(latitude);
           setLng(longitude);
-          // Update location name
           await reverseGeocode(latitude, longitude);
         },
         (error) => {

@@ -1,7 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
-const MAX_VIDEO_DURATION = 10; // seconds
+const MAX_VIDEO_DURATION = 10;
 
 let ffmpegInstance: FFmpeg | null = null;
 let isFFmpegLoading = false;
@@ -15,7 +15,6 @@ async function getFFmpeg(): Promise<FFmpeg> {
   }
 
   if (isFFmpegLoading) {
-    // Wait for existing load to complete
     while (isFFmpegLoading) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -27,8 +26,6 @@ async function getFFmpeg(): Promise<FFmpeg> {
   isFFmpegLoading = true;
   try {
     const ffmpeg = new FFmpeg();
-    
-    // Load FFmpeg core files
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -69,7 +66,7 @@ async function getVideoDuration(file: File): Promise<number> {
  */
 export async function validateVideoDuration(file: File): Promise<{ valid: boolean; error?: string }> {
   if (!file.type.startsWith('video/')) {
-    return { valid: true }; // Not a video, skip validation
+    return { valid: true };
   }
 
   try {
@@ -95,53 +92,45 @@ export async function validateVideoDuration(file: File): Promise<{ valid: boolea
  */
 export async function processVideo(file: File): Promise<File> {
   if (!file.type.startsWith('video/')) {
-    return file; // Not a video, return as-is
+    return file;
   }
 
   try {
     const duration = await getVideoDuration(file);
     
-    // If video is already short and small, skip processing
     if (duration <= MAX_VIDEO_DURATION && file.size < 10 * 1024 * 1024) {
       return file;
     }
 
     const ffmpeg = await getFFmpeg();
-    
-    // Write input file
     const inputFileName = 'input.' + file.name.split('.').pop();
     await ffmpeg.writeFile(inputFileName, await fetchFile(file));
 
-    // Process video: trim to 10s, compress, convert to MP4
     const trimDuration = Math.min(duration, MAX_VIDEO_DURATION);
     
     await ffmpeg.exec([
       '-i', inputFileName,
       '-t', String(trimDuration),
       '-c:v', 'libx264',
-      '-crf', '28', // Quality (28 is good balance)
+      '-crf', '28',
       '-preset', 'fast',
       '-c:a', 'aac',
       '-b:a', '128k',
-      '-movflags', '+faststart', // Web optimization
-      '-y', // Overwrite output
+      '-movflags', '+faststart',
+      '-y',
       'output.mp4',
     ]);
 
-    // Read output
     const data = await ffmpeg.readFile('output.mp4');
     const blob = new Blob([data], { type: 'video/mp4' });
     
-    // Clean up
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile('output.mp4');
 
-    // Create new File with original name but .mp4 extension
     const outputFileName = file.name.replace(/\.[^/.]+$/, '') + '.mp4';
     return new File([blob], outputFileName, { type: 'video/mp4' });
   } catch (error) {
     console.error('Error processing video:', error);
-    // If processing fails, return original file
     return file;
   }
 }
@@ -159,7 +148,7 @@ async function extractThumbnail(file: File, ffmpeg: FFmpeg): Promise<File | null
       '-i', inputFileName,
       '-ss', '00:00:01',
       '-vframes', '1',
-      '-vf', 'scale=320:-1', // Scale to 320px width, maintain aspect ratio
+      '-vf', 'scale=320:-1',
       '-y',
       'thumbnail.jpg',
     ]);
@@ -167,7 +156,6 @@ async function extractThumbnail(file: File, ffmpeg: FFmpeg): Promise<File | null
     const data = await ffmpeg.readFile('thumbnail.jpg');
     const blob = new Blob([data], { type: 'image/jpeg' });
     
-    // Clean up
     await ffmpeg.deleteFile(inputFileName);
     await ffmpeg.deleteFile('thumbnail.jpg');
 
@@ -188,11 +176,7 @@ export async function processVideoWithThumbnail(file: File): Promise<{ video: Fi
 
   try {
     const ffmpeg = await getFFmpeg();
-    
-    // Process video first
     const processedVideo = await processVideo(file);
-    
-    // Extract thumbnail from original file (before processing)
     const thumbnail = await extractThumbnail(file, ffmpeg);
     
     return { video: processedVideo, thumbnail };

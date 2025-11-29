@@ -20,26 +20,21 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
-  // Calculate stats once and memoize to ensure consistency
   const stats = React.useMemo(() => calculateRecapStats(pins, year), [pins, year]);
 
-  // Initialize and play audio
   useEffect(() => {
     const audio = new Audio('/recap.mp3');
     audio.loop = true;
-    audio.volume = 0.7; // Start at 70% volume
+    audio.volume = 0.7;
     audioRef.current = audio;
 
-    // Play audio when component mounts
     audio.play().catch((error) => {
-      // Ignore AbortError - it's common in React strict mode when component unmounts quickly
       if (error.name !== 'AbortError') {
         console.error('Error playing audio:', error);
       }
     });
 
     return () => {
-      // Cleanup: stop and remove audio
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -50,11 +45,10 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
     };
   }, []);
 
-  // Fade out audio when reaching summary phase
   useEffect(() => {
     if (phase === 'summary' && audioRef.current) {
       const audio = audioRef.current;
-      const fadeDuration = 2000; // 2 seconds fade
+      const fadeDuration = 2000;
       const fadeSteps = 20;
       const volumeStep = audio.volume / fadeSteps;
       const stepDuration = fadeDuration / fadeSteps;
@@ -80,13 +74,11 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
     };
   }, [phase]);
 
-  // Auto-advance through phases
   useEffect(() => {
     if (phase === 'intro') {
       const timer = setTimeout(() => setPhase('places'), 2500);
       return () => clearTimeout(timer);
     } else if (phase === 'places') {
-      // Wait for animation to complete (2000ms animation + 500ms buffer)
       const timer = setTimeout(() => setPhase('days'), 3500);
       return () => clearTimeout(timer);
     } else if (phase === 'days') {
@@ -105,7 +97,6 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
       const timer = setTimeout(() => setPhase('pins'), 3500);
       return () => clearTimeout(timer);
     } else if (phase === 'pins') {
-      // Auto-advance through pins - give more time for media to load
       if (pinIndex < pins.length - 1) {
         const timer = setTimeout(() => {
           setIsAnimating(true);
@@ -113,17 +104,15 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
             setPinIndex(pinIndex + 1);
             setIsAnimating(false);
           }, 500);
-        }, 4000); // Increased from 3000 to allow media to load
+        }, 4000);
         return () => clearTimeout(timer);
       } else {
-        // All pins shown, go to summary - give extra time for last pin media
         const timer = setTimeout(() => setPhase('summary'), 4000);
         return () => clearTimeout(timer);
       }
     }
   }, [phase, pinIndex, pins.length]);
 
-  // Animation trigger
   useEffect(() => {
     if (phase !== 'intro' && phase !== 'pins' && phase !== 'summary') {
       setIsAnimating(true);
@@ -143,10 +132,8 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
       style={{ background: 'linear-gradient(to bottom right, #2563EB, #1D4ED8, #1E40AF)' }}
     >
-      {/* Close button */}
       <button
         onClick={() => {
-          // Stop audio when closing
           if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current = null;
@@ -175,7 +162,6 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
         </svg>
       </button>
 
-      {/* Intro Phase */}
       {phase === 'intro' && (
         <div className={`text-center transition-opacity duration-500 ${isAnimating ? 'opacity-0' : 'opacity-100'}`}>
           <h1 className="text-6xl md:text-8xl font-bold text-white mb-4">
@@ -187,7 +173,6 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
         </div>
       )}
 
-      {/* Stats Phases */}
       {phase === 'places' && (
         <StatSlide
           isAnimating={isAnimating}
@@ -242,7 +227,6 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
         />
       )}
 
-      {/* Pins Phase */}
       {phase === 'pins' && currentPin && (
         <PinSlide
           pin={currentPin}
@@ -252,7 +236,6 @@ export default function YearRecap({ pins, year, onClose }: YearRecapProps) {
         />
       )}
 
-      {/* Summary Phase */}
       {phase === 'summary' && (
         <SummarySlide 
           stats={stats} 
@@ -290,18 +273,15 @@ function StatSlide({
       return;
     }
 
-    // Reset to 0 first
     setDisplayNumber(0);
     startTimeRef.current = null;
     
-    // Small delay to ensure smooth transition, then start animation
     const startTimer = setTimeout(() => {
-      const duration = 2000; // 2 seconds for smooth counting
+      const duration = 2000;
       const startTime = performance.now();
       startTimeRef.current = startTime;
       
-      // Calculate how many steps we need - ensure we show every integer
-      const maxSteps = Math.min(number, 100); // Cap at 100 steps for very large numbers
+      const maxSteps = Math.min(number, 100);
       const stepDuration = duration / maxSteps;
       let lastDisplayed = 0;
       
@@ -311,10 +291,8 @@ function StatSlide({
         const elapsed = currentTime - startTimeRef.current;
         const progress = Math.min(elapsed / duration, 1);
         
-        // Linear interpolation for smooth counting
         const targetValue = number * progress;
         
-        // Only update if we've moved to the next integer
         const currentInt = Math.floor(targetValue);
         if (currentInt !== lastDisplayed && currentInt <= number) {
           setDisplayNumber(currentInt);
@@ -324,7 +302,6 @@ function StatSlide({
         if (progress < 1) {
           animationRef.current = requestAnimationFrame(animate);
         } else {
-          // Ensure we end at the exact number
           setDisplayNumber(number);
           animationRef.current = null;
         }
@@ -437,7 +414,6 @@ function MediaItem({
     <div className="relative aspect-square rounded-xl overflow-hidden shadow-xl">
       {media.media_type === 'video' ? (
         <>
-          {/* Thumbnail image - shown during capture, hidden when video is playing */}
           {thumbnailUrl && (
             <img
               src={thumbnailUrl}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import MapView from '@/components/MapView';
 import AddPinButton from '@/components/AddPinButton';
 import AddPinModal from '@/components/AddPinModal';
@@ -36,12 +37,10 @@ export default function Home() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const hasCenteredOnUserLocationRef = useRef(false);
 
-  // Check auth status and load pins
   useEffect(() => {
     checkAuth();
   }, []);
 
-  // Request location permission and center map when user logs in
   useEffect(() => {
     if (user && !hasRequestedLocation) {
       requestUserLocation();
@@ -49,26 +48,17 @@ export default function Home() {
     }
   }, [user, hasRequestedLocation]);
 
-  // Center map on user location when it becomes available
-  // This takes priority over pin centering
-  // Use a ref to track if we've already centered on user location to avoid multiple updates
   useEffect(() => {
     if (userLocation && hasUserLocation) {
-      // Mark that we've centered on user location - this prevents pin centering
       hasCenteredOnUserLocationRef.current = true;
-      // Force update the map view state to center on user location
       setMapViewState({
         longitude: userLocation.longitude,
         latitude: userLocation.latitude,
-        zoom: 12, // Closer zoom for current location
+        zoom: 12,
       });
     }
   }, [userLocation, hasUserLocation]);
 
-  // Prevent pin centering if user location is available or being requested
-  // This ensures user location always takes priority
-
-  // Load pins when user changes
   useEffect(() => {
     if (user) {
       loadPins();
@@ -83,7 +73,6 @@ export default function Home() {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
     
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -96,22 +85,18 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          // Store user location for marker
           setUserLocation({ latitude, longitude });
           setHasUserLocation(true);
-          // Map centering will be handled by the useEffect that watches userLocation
         },
         (error) => {
           console.error('Error getting location:', error);
-          // If permission denied or error, keep default location
-          // Don't show alert as it might be annoying
           setHasUserLocation(false);
           setUserLocation(null);
         },
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 0, // Always get fresh location
+          maximumAge: 0,
         }
       );
     }
@@ -133,21 +118,16 @@ export default function Home() {
           years.add(year);
         }
       });
-      const sortedYears = Array.from(years).sort((a, b) => b - a); // Most recent first
+      const sortedYears = Array.from(years).sort((a, b) => b - a);
       setAvailableYears(sortedYears);
       
-      // Set selected year to most recent year if available
       if (sortedYears.length > 0 && !availableYears.includes(selectedYear)) {
         setSelectedYear(sortedYears[0]);
       }
       
-      // Load recent media
       const recent = await getRecentMedia(20);
       setRecentMedia(recent);
       
-      // Don't center on pins if user location is available or being requested
-      // User location should always take priority
-      // Only center on pins if we haven't centered on user location and location is not being requested
       if (userPins.length > 0 && !hasCenteredOnUserLocationRef.current && !hasRequestedLocation) {
         const avgLat = userPins.reduce((sum, p) => sum + p.lat, 0) / userPins.length;
         const avgLng = userPins.reduce((sum, p) => sum + p.lng, 0) / userPins.length;
@@ -179,11 +159,11 @@ export default function Home() {
   const handleAddPin = async (data: CreatePinData) => {
     try {
       await createPinWithMedia(data);
-      await loadPins(); // Reload pins and recent media
+      await loadPins();
       setIsAddPinOpen(false);
     } catch (error) {
       console.error('Error creating pin:', error);
-      throw error; // Re-throw so modal can handle it
+      throw error;
     }
   };
 
@@ -194,11 +174,10 @@ export default function Home() {
         setSelectedPin(pinWithMedia);
         setIsPinDetailsOpen(true);
         
-        // Move map to the pin's location
         setMapViewState({
           longitude: pinWithMedia.lng,
           latitude: pinWithMedia.lat,
-          zoom: 13, // Zoom in to show the pin clearly
+          zoom: 13,
         });
       }
     } catch (error) {
@@ -209,14 +188,22 @@ export default function Home() {
   const handleStartRecap = async () => {
     if (!user) return;
     
+    setIsPinDetailsOpen(false);
+    setSelectedPin(null);
+    
     try {
       const yearPins = await getPinsForYear(selectedYear);
       if (yearPins.length === 0) {
         alert(`No pins found for ${selectedYear}`);
         return;
       }
-      setRecapPins(yearPins);
-      setIsRecapMode(true);
+      
+      flushSync(() => {
+        setRecapPins(yearPins);
+      });
+      flushSync(() => {
+        setIsRecapMode(true);
+      });
     } catch (error) {
       console.error('Error loading recap pins:', error);
       alert('Failed to load recap data');
@@ -228,7 +215,6 @@ export default function Home() {
     setRecapPins([]);
   };
 
-  // Get polyline points - show route for all pins
   const polylinePoints: [number, number][] | undefined = pins.length > 0
     ? pins.map((pin) => [pin.lng, pin.lat])
     : undefined;
@@ -239,7 +225,6 @@ export default function Home() {
     setUser(null);
   };
 
-  // Show landing page if user is not authenticated
   if (!user) {
     return (
       <LandingPage
@@ -252,9 +237,8 @@ export default function Home() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-white">
-      {/* Navigation Bar - Hide when pin details or recap is open */}
-      {!isPinDetailsOpen && !isRecapMode && (
-        <div className="absolute top-2 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      {!isRecapMode && (
+        <div className="absolute top-2 left-0 right-0 z-[60] bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {availableYears.length > 0 ? (
             <select
@@ -286,7 +270,6 @@ export default function Home() {
       </div>
       )}
 
-      {/* Map View - Hide when recap is open */}
       {!isRecapMode && (
         <div className={`absolute left-0 right-0 ${
           recentMedia.length > 0 ? 'top-[73px] bottom-[160px]' : 'top-[73px] bottom-[120px]'
@@ -311,7 +294,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Recent Media - Keep visible even when pin details is open */}
       {!isRecapMode && user && recentMedia.length > 0 && (
         <RecentMedia 
           media={recentMedia} 
@@ -319,7 +301,6 @@ export default function Home() {
         />
       )}
 
-      {/* Add Pin Button - Hide when pin details is open */}
       {!isRecapMode && !isPinDetailsOpen && user && (
         <AddPinButton 
           onClick={() => setIsAddPinOpen(true)}
@@ -327,7 +308,6 @@ export default function Home() {
         />
       )}
 
-      {/* Pin Details View Overlay */}
       {isPinDetailsOpen && selectedPin && (
         <PinDetailsView
           pin={selectedPin}
@@ -338,8 +318,6 @@ export default function Home() {
         />
       )}
 
-
-      {/* Add Pin Modal */}
       <AddPinModal
         isOpen={isAddPinOpen}
         onClose={() => setIsAddPinOpen(false)}
@@ -357,8 +335,6 @@ export default function Home() {
         }
       />
 
-
-      {/* Year Recap */}
       {isRecapMode && recapPins.length > 0 && (
         <YearRecap
           pins={recapPins}

@@ -1,6 +1,5 @@
 'use client';
 
-// Import proxy interceptor FIRST, before mapbox-gl
 import '@/lib/mapbox-proxy';
 
 import { useEffect, useRef, useState } from 'react';
@@ -47,14 +46,9 @@ export default function MapView({
     handlePointerUp: () => void;
   } | null>(null);
 
-  // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    // Use a style URL that will be proxied through our API
-    // mapbox-gl will convert mapbox:// URLs to https://api.mapbox.com URLs
-    // We use transformRequest to route all Mapbox requests through our proxy
-    // We use a placeholder token that looks valid - it will be replaced by our proxy with the real server-side token
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
@@ -63,19 +57,14 @@ export default function MapView({
         initialViewState?.latitude || 37.7749,
       ],
       zoom: initialViewState?.zoom || 10,
-      // Placeholder token - must be valid format (pk.*) to pass mapbox-gl validation
-      // All requests will be intercepted and routed through /api/mapbox/* which adds the real token server-side
       accessToken: 'pk.proxy_placeholder_token_will_be_replaced_by_server',
-      // Transform all Mapbox requests to go through our proxy
       transformRequest: (url: string, resourceType?: string) => {
-        // Only transform Mapbox API requests
         if (url.includes('api.mapbox.com') || url.includes('events.mapbox.com')) {
           try {
             const urlObj = new URL(url);
             const hostname = urlObj.hostname;
             const pathname = urlObj.pathname;
             
-            // Determine the base path based on domain
             let basePath = '';
             if (hostname.includes('events.mapbox.com')) {
               basePath = 'events';
@@ -83,16 +72,12 @@ export default function MapView({
               basePath = 'api';
             }
             
-            // Extract the path after the domain
             let path = pathname.startsWith('/') ? pathname.slice(1) : pathname;
             
-            // Build the full path
             let fullPath: string;
             if (hostname.includes('events.mapbox.com')) {
-              // Events domain: path is already "events/v2", use as-is
               fullPath = path;
             } else if (hostname.includes('api.mapbox.com')) {
-              // API domain: add "api/" prefix if not already present
               if (path.startsWith('api/')) {
                 fullPath = path;
               } else {
@@ -102,11 +87,9 @@ export default function MapView({
               fullPath = path;
             }
             
-            // Remove access_token from query params
             urlObj.searchParams.delete('access_token');
             const queryString = urlObj.searchParams.toString();
             
-            // Return the proxied URL as an absolute URL (required by Request constructor)
             const proxyPath = `/api/mapbox/${fullPath}${queryString ? `?${queryString}` : ''}`;
             const proxyUrl = typeof window !== 'undefined' 
               ? `${window.location.origin}${proxyPath}`
@@ -116,12 +99,10 @@ export default function MapView({
             };
           } catch (e) {
             console.error('Error transforming Mapbox URL:', e, url);
-            // If transformation fails, return original URL
             return { url };
           }
         }
         
-        // For non-Mapbox URLs, return as-is
         return { url };
       },
     });
@@ -130,14 +111,12 @@ export default function MapView({
       setIsMapLoaded(true);
     });
 
-    // Track pointer events to detect dragging
     const handlePointerDown = () => {
       isDragging.current = true;
     };
 
     const handlePointerUp = () => {
       isDragging.current = false;
-      // Update state immediately when drag ends
       if (map.current && onViewStateChange && !isProgrammaticUpdate.current) {
         const center = map.current.getCenter();
         const zoom = map.current.getZoom();
@@ -149,13 +128,11 @@ export default function MapView({
       }
     };
 
-    // Store handlers in ref for cleanup
     pointerHandlersRef.current = {
       handlePointerDown,
       handlePointerUp,
     };
 
-    // Add pointer event listeners to the map container
     const container = mapContainer.current;
     if (container) {
       container.addEventListener('pointerdown', handlePointerDown);
@@ -163,17 +140,12 @@ export default function MapView({
       container.addEventListener('pointercancel', handlePointerUp);
     }
 
-    // Debounce move events to avoid interrupting drag
     map.current.on('move', () => {
-      // Only call onViewStateChange if this is a user-initiated move, not programmatic
-      // And only if not currently dragging (to allow continuous drag)
       if (map.current && onViewStateChange && !isProgrammaticUpdate.current && !isDragging.current) {
-        // Clear any pending timeout
         if (moveTimeoutRef.current) {
           clearTimeout(moveTimeoutRef.current);
         }
         
-        // Debounce the state update
         moveTimeoutRef.current = setTimeout(() => {
           if (map.current && !isDragging.current) {
             const center = map.current.getCenter();
@@ -192,7 +164,6 @@ export default function MapView({
       if (moveTimeoutRef.current) {
         clearTimeout(moveTimeoutRef.current);
       }
-      // Remove pointer event listeners
       const container = mapContainer.current;
       const handlers = pointerHandlersRef.current;
       if (container && handlers) {
@@ -207,13 +178,10 @@ export default function MapView({
     };
   }, []);
 
-  // Track previous view state to detect changes
   const prevViewStateRef = useRef<{ longitude: number; latitude: number; zoom: number } | null>(null);
 
-  // Update map center when initialViewState changes
   useEffect(() => {
     if (map.current && initialViewState && isMapLoaded) {
-      // Only update if the view state actually changed
       const hasChanged = !prevViewStateRef.current ||
         prevViewStateRef.current.longitude !== initialViewState.longitude ||
         prevViewStateRef.current.latitude !== initialViewState.latitude ||
@@ -221,19 +189,16 @@ export default function MapView({
 
       if (hasChanged) {
         isProgrammaticUpdate.current = true;
-        // Use flyTo for smoother transitions, especially when centering on user location
         map.current.flyTo({
           center: [initialViewState.longitude, initialViewState.latitude],
           zoom: initialViewState.zoom,
           duration: 1000,
         });
-        // Update ref
         prevViewStateRef.current = {
           longitude: initialViewState.longitude,
           latitude: initialViewState.latitude,
           zoom: initialViewState.zoom,
         };
-        // Reset flag after animation completes
         setTimeout(() => {
           isProgrammaticUpdate.current = false;
         }, 1100);
@@ -241,7 +206,6 @@ export default function MapView({
     }
   }, [initialViewState, isMapLoaded]);
 
-  // Pan to highlighted pin
   useEffect(() => {
     if (highlightedPinId && map.current) {
       const pin = pins.find((p) => p.id === highlightedPinId);
@@ -252,7 +216,6 @@ export default function MapView({
           zoom: 12,
           duration: 1000,
         });
-        // Reset flag after animation completes
         setTimeout(() => {
           isProgrammaticUpdate.current = false;
         }, 1100);
@@ -260,15 +223,12 @@ export default function MapView({
     }
   }, [highlightedPinId, pins]);
 
-  // Update markers when pins change
   useEffect(() => {
     if (!map.current || !isMapLoaded) return;
 
-    // Remove existing markers
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    // Add new markers with signed URLs
     const createMarkers = async () => {
       const { getSignedUrl } = await import('@/lib/supabase/storage-urls');
       
@@ -280,10 +240,8 @@ export default function MapView({
         
         const isHighlighted = highlightedPinId === pin.id;
         
-        // Get signed URL for thumbnail if it exists
         let thumbnailUrl: string | null = null;
         if (pin.thumbnail_url) {
-          // Check if it's already a full URL (backward compatibility)
           if (pin.thumbnail_url.startsWith('http://') || pin.thumbnail_url.startsWith('https://')) {
             thumbnailUrl = pin.thumbnail_url;
           } else {
@@ -316,7 +274,6 @@ export default function MapView({
         el.addEventListener('click', handleClick);
         el.addEventListener('mousedown', (e) => e.stopPropagation());
 
-        // Check if map is still valid before adding marker
         if (map.current && map.current.getCanvasContainer()) {
           const marker = new mapboxgl.Marker(el)
             .setLngLat([pin.lng, pin.lat])
@@ -330,17 +287,14 @@ export default function MapView({
     createMarkers();
   }, [pins, highlightedPinId, isMapLoaded, onPinClick]);
 
-  // Update user location marker
   useEffect(() => {
     if (!map.current || !isMapLoaded) return;
 
-    // Remove existing user location marker
     if (userLocationMarkerRef.current) {
       userLocationMarkerRef.current.remove();
       userLocationMarkerRef.current = null;
     }
 
-    // Add user location marker if location is available
     if (userLocation) {
       const el = document.createElement('div');
       el.className = 'user-location-marker';
@@ -364,10 +318,8 @@ export default function MapView({
     };
   }, [userLocation, isMapLoaded]);
 
-  // Update polyline when polylinePoints change
   useEffect(() => {
     if (!map.current || !isMapLoaded || !polylinePoints || polylinePoints.length < 2) {
-      // Remove polyline if it exists
       if (map.current?.getSource('polyline')) {
         if (map.current.getLayer('polyline-layer')) {
           map.current.removeLayer('polyline-layer');
@@ -380,7 +332,6 @@ export default function MapView({
     const source = map.current.getSource('polyline') as mapboxgl.GeoJSONSource;
 
     if (source) {
-      // Update existing source
       source.setData({
         type: 'Feature',
         properties: {},
@@ -390,7 +341,6 @@ export default function MapView({
         },
       });
     } else {
-      // Create new source and layer
       map.current.addSource('polyline', {
         type: 'geojson',
         data: {
