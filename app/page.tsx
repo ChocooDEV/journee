@@ -193,6 +193,13 @@ export default function Home() {
       if (pinWithMedia) {
         setSelectedPin(pinWithMedia);
         setIsPinDetailsOpen(true);
+        
+        // Move map to the pin's location
+        setMapViewState({
+          longitude: pinWithMedia.lng,
+          latitude: pinWithMedia.lat,
+          zoom: 13, // Zoom in to show the pin clearly
+        });
       }
     } catch (error) {
       console.error('Error loading pin details:', error);
@@ -304,8 +311,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Recent Media - Hide when pin details is open */}
-      {!isRecapMode && !isPinDetailsOpen && user && recentMedia.length > 0 && (
+      {/* Recent Media - Keep visible even when pin details is open */}
+      {!isRecapMode && user && recentMedia.length > 0 && (
         <RecentMedia 
           media={recentMedia} 
           onMediaClick={handleRecentMediaClick}

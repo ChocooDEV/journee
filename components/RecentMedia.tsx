@@ -57,7 +57,7 @@ export default function RecentMedia({ media, onMediaClick }: RecentMediaProps) {
   }
 
   return (
-    <div className="absolute bottom-[80px] left-0 right-0 z-30 bg-white border-t border-gray-200">
+    <div className="absolute bottom-[80px] left-0 right-0 z-[60] bg-white border-t border-gray-200">
       <div className="px-4 py-3">
         <h3 className="text-sm font-medium text-gray-900 mb-2">Recent Photos or Videos</h3>
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
