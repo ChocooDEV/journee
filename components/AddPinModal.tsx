@@ -504,23 +504,34 @@ export default function AddPinModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto text-gray-900">
-      {/* Navigation Bar */}
-      <div className="absolute top-2 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={handleClose}
-          className="text-blue-600 font-medium text-base hover:text-blue-700"
-          disabled={isSubmitting}
-        >
-          Cancel
-        </button>
-        <h1 className="text-lg font-semibold text-gray-900">Add Photo</h1>
-        <div className="w-16" /> {/* Spacer for centering */}
-      </div>
-
+    <div className="fixed top-[45px] bottom-0 left-0 right-0 z-[65] bg-white overflow-y-auto text-gray-900">
       {/* Form Content */}
-      <div className="pt-[73px] pb-24 px-4">
+      <div className="pb-24 px-4">
         <div className="max-w-md mx-auto space-y-6 pt-6">
+          {/* Close Button */}
+          <div className="flex justify-start mb-4">
+            <button
+              onClick={handleClose}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-900 hover:bg-gray-200 active:bg-gray-300 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow"
+              disabled={isSubmitting}
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+              <span>Cancel</span>
+            </button>
+          </div>
+
           {/* Location */}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-900">

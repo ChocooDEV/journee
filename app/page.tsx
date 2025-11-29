@@ -238,7 +238,7 @@ export default function Home() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-white">
       {!isRecapMode && (
-        <div className="absolute top-2 left-0 right-0 z-[60] bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <div className="absolute left-0 right-0 z-[60] bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {availableYears.length > 0 ? (
             <select
@@ -257,7 +257,7 @@ export default function Home() {
             <div className="px-3 py-1.5 text-sm text-gray-500">No pins yet</div>
           )}
         </div>
-        <h1 className="text-lg font-semibold text-gray-900">Add Your Memories</h1>
+        <h1 className="text-lg font-semibold text-gray-900">Journee</h1>
         <button
           onClick={() => {
             handleStartRecap();
@@ -272,7 +272,7 @@ export default function Home() {
 
       {!isRecapMode && (
         <div className={`absolute left-0 right-0 ${
-          recentMedia.length > 0 ? 'top-[73px] bottom-[160px]' : 'top-[73px] bottom-[120px]'
+          recentMedia.length > 0 ? 'top-[59px] bottom-[160px]' : 'top-[59px] bottom-[120px]'
         }`}>
           {isLoading ? (
             <div className="flex h-full w-full items-center justify-center bg-gray-100">
