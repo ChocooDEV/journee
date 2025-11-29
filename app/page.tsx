@@ -6,7 +6,7 @@ import AddPinButton from '@/components/AddPinButton';
 import AddPinModal from '@/components/AddPinModal';
 import PinDetailsView from '@/components/PinDetailsView';
 import YearRecapControls from '@/components/YearRecapControls';
-import YearRecapOverlay from '@/components/YearRecapOverlay';
+import YearRecap from '@/components/YearRecap';
 import LandingPage from '@/components/LandingPage';
 import { getPinsForUser, getPinWithMedia, createPinWithMedia, getPinsForYear, getRecentMedia } from '@/lib/supabase/queries';
 import { createClient } from '@/lib/supabase/client-browser';
@@ -24,8 +24,6 @@ export default function Home() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isRecapMode, setIsRecapMode] = useState(false);
   const [recapPins, setRecapPins] = useState<PinWithMedia[]>([]);
-  const [recapIndex, setRecapIndex] = useState(0);
-  const [isRecapPlaying, setIsRecapPlaying] = useState(false);
   const [recentMedia, setRecentMedia] = useState<PinMedia[]>([]);
   const [mapViewState, setMapViewState] = useState({
     longitude: -122.4194,
@@ -211,37 +209,21 @@ export default function Home() {
         return;
       }
       setRecapPins(yearPins);
-      setRecapIndex(0);
       setIsRecapMode(true);
-      setIsRecapPlaying(true);
     } catch (error) {
       console.error('Error loading recap pins:', error);
       alert('Failed to load recap data');
     }
   };
 
-  const handleRecapIndexChange = (newIndex: number) => {
-    setRecapIndex(newIndex);
-    setIsRecapPlaying(false); // Pause when manually navigating
-  };
-
   const handleCloseRecap = () => {
     setIsRecapMode(false);
-    setIsRecapPlaying(false);
     setRecapPins([]);
-    setRecapIndex(0);
   };
 
-  // Get polyline points - show route for all pins or recap pins
-  const polylinePoints: [number, number][] | undefined = isRecapMode
-    ? recapPins.map((pin) => [pin.lng, pin.lat])
-    : pins.length > 0
+  // Get polyline points - show route for all pins
+  const polylinePoints: [number, number][] | undefined = pins.length > 0
     ? pins.map((pin) => [pin.lng, pin.lat])
-    : undefined;
-
-  // Get highlighted pin ID for recap mode
-  const highlightedPinId = isRecapMode && recapPins[recapIndex]
-    ? recapPins[recapIndex].id
     : undefined;
 
   const handleSignOut = async () => {
@@ -263,8 +245,8 @@ export default function Home() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-white">
-      {/* Status Bar (for mobile) - Hide when pin details is open */}
-      {!isPinDetailsOpen && (
+      {/* Status Bar (for mobile) - Hide when pin details or recap is open */}
+      {!isPinDetailsOpen && !isRecapMode && (
         <div className="absolute top-0 left-0 right-0 z-50 h-6 bg-white flex items-center justify-between px-4 text-xs text-gray-600">
           <span>9:41</span>
           <div className="flex items-center gap-1">
@@ -281,8 +263,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* Navigation Bar - Hide when pin details is open */}
-      {!isPinDetailsOpen && (
+      {/* Navigation Bar - Hide when pin details or recap is open */}
+      {!isPinDetailsOpen && !isRecapMode && (
         <div className="absolute top-6 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {availableYears.length > 0 ? (
@@ -315,29 +297,30 @@ export default function Home() {
       </div>
       )}
 
-      {/* Map View */}
-      <div className={`absolute left-0 right-0 ${
-        recentMedia.length > 0 ? 'top-[73px] bottom-[160px]' : 'top-[73px] bottom-[120px]'
-      }`}>
-        {isLoading ? (
-          <div className="flex h-full w-full items-center justify-center bg-gray-100">
-            <div className="text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-              <p className="mt-4 text-gray-600">Loading your places...</p>
+      {/* Map View - Hide when recap is open */}
+      {!isRecapMode && (
+        <div className={`absolute left-0 right-0 ${
+          recentMedia.length > 0 ? 'top-[73px] bottom-[160px]' : 'top-[73px] bottom-[120px]'
+        }`}>
+          {isLoading ? (
+            <div className="flex h-full w-full items-center justify-center bg-gray-100">
+              <div className="text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+                <p className="mt-4 text-gray-600">Loading your places...</p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <MapView
-            pins={pins}
-            onPinClick={handlePinClick}
-            highlightedPinId={highlightedPinId}
-            polylinePoints={polylinePoints}
-            userLocation={userLocation || undefined}
-            initialViewState={mapViewState}
-            onViewStateChange={setMapViewState}
-          />
-        )}
-      </div>
+          ) : (
+            <MapView
+              pins={pins}
+              onPinClick={handlePinClick}
+              polylinePoints={polylinePoints}
+              userLocation={userLocation || undefined}
+              initialViewState={mapViewState}
+              onViewStateChange={setMapViewState}
+            />
+          )}
+        </div>
+      )}
 
       {/* Recent Media - Hide when pin details is open */}
       {!isRecapMode && !isPinDetailsOpen && user && recentMedia.length > 0 && (
@@ -386,14 +369,11 @@ export default function Home() {
       />
 
 
-      {/* Year Recap Overlay */}
+      {/* Year Recap */}
       {isRecapMode && recapPins.length > 0 && (
-        <YearRecapOverlay
+        <YearRecap
           pins={recapPins}
-          currentIndex={recapIndex}
-          isPlaying={isRecapPlaying}
-          onIndexChange={handleRecapIndexChange}
-          onPlayPause={() => setIsRecapPlaying(!isRecapPlaying)}
+          year={selectedYear}
           onClose={handleCloseRecap}
         />
       )}

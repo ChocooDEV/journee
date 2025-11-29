@@ -316,11 +316,14 @@ export default function MapView({
         el.addEventListener('click', handleClick);
         el.addEventListener('mousedown', (e) => e.stopPropagation());
 
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat([pin.lng, pin.lat])
-          .addTo(map.current!);
+        // Check if map is still valid before adding marker
+        if (map.current && map.current.getCanvasContainer()) {
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat([pin.lng, pin.lat])
+            .addTo(map.current);
 
-        markersRef.current.push(marker);
+          markersRef.current.push(marker);
+        }
       }
     };
 
