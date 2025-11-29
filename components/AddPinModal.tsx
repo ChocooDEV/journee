@@ -42,7 +42,7 @@ export default function AddPinModal({
     total: 0, 
     fileName: '',
     stage: 'loading' as 'loading' | 'processing' | 'thumbnail' | 'complete',
-    progress: 0 // 0-100 percentage
+    progress: 0
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
@@ -256,26 +256,22 @@ export default function AddPinModal({
 
   if (!isOpen) return null;
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Reset cancellation flag at start of new operation
+  const     handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     isCancelledRef.current = false;
     const selectedFiles = Array.from(e.target.files || []);
     
     if (selectedFiles.length === 0) return;
 
-    // Validate files first (before processing to save time)
     const { validateFiles } = await import('@/lib/supabase/storage-utils');
     const validation = validateFiles(selectedFiles);
     if (!validation.valid) {
       alert(`Please fix the following issues:\n\n${validation.errors.join('\n')}`);
-      // Reset input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
       return;
     }
-
-    // Validate video durations
+    
     const videoFiles = selectedFiles.filter(f => f.type.startsWith('video/'));
     if (videoFiles.length > 0) {
       const videoValidationErrors: string[] = [];
@@ -505,10 +501,8 @@ export default function AddPinModal({
 
   return (
     <div className="fixed top-[45px] bottom-0 left-0 right-0 z-[65] bg-white overflow-y-auto text-gray-900">
-      {/* Form Content */}
       <div className="pb-24 px-4">
         <div className="max-w-md mx-auto space-y-6 pt-6">
-          {/* Close Button */}
           <div className="flex justify-start mb-4">
             <button
               onClick={handleClose}
@@ -532,7 +526,6 @@ export default function AddPinModal({
             </button>
           </div>
 
-          {/* Location */}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-900">
               Location
@@ -549,7 +542,6 @@ export default function AddPinModal({
                   }
                 }}
                 onBlur={() => {
-                  // Delay hiding autocomplete to allow clicking on suggestions
                   setTimeout(() => setShowAutocomplete(false), 200);
                 }}
                 className="w-full px-3 py-2 pr-32 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
@@ -573,7 +565,6 @@ export default function AddPinModal({
                 <span className="text-blue-600">Use My Location</span>
               </button>
               
-              {/* Autocomplete Dropdown */}
               {showAutocomplete && autocompleteSuggestions.length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                   {autocompleteSuggestions.map((feature, index) => (
@@ -597,7 +588,6 @@ export default function AddPinModal({
             </div>
           </div>
 
-          {/* Photo */}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-900">
               Photo
@@ -643,7 +633,6 @@ export default function AddPinModal({
                           {videoProcessingProgress.fileName}
                         </div>
                       )}
-                      {/* Progress Bar */}
                       <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                         <div
                           className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
@@ -724,7 +713,6 @@ export default function AddPinModal({
             )}
           </div>
 
-          {/* Caption */}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-900">
               Caption
@@ -738,7 +726,6 @@ export default function AddPinModal({
             />
           </div>
 
-          {/* Date */}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-900">
               Date
@@ -754,7 +741,6 @@ export default function AddPinModal({
         </div>
       </div>
 
-      {/* Add Button */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 p-4">
         <button
           onClick={handleSubmit}

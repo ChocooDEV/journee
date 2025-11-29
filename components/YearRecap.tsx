@@ -263,7 +263,6 @@ function StatSlide({
 
   React.useEffect(() => {
     if (isAnimating) {
-      // Reset when animating out
       setDisplayNumber(0);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
